@@ -25,7 +25,7 @@ for (x in names())
 
 In this example, we want a `Generator<Int, String>` instead. `Int` is what this generator produces. `String` is what this generator accepts via `send(value)`. This is like in JavaScript and Python where you can also send values back into the generator.
 
-```
+```haxe
 function greet(a:Int, b:String):Generator<Int, String>
 {
     for (i in a...10)
@@ -33,7 +33,7 @@ function greet(a:Int, b:String):Generator<Int, String>
         if (i == 5)
             trace("yo" + @yield 999);
         else
-            trace(b + @yield vv);
+            trace(b + @yield i);
     }
 }
 
@@ -64,7 +64,7 @@ So what else is valid besides Iterator and Generator? Here's a complete list:
 
 Async generator types are simply iterators. You need to manually iterate through them. Async fiber types are iterators added into a `Fiber` object. The fiber `Processor` is usually added to your game loop or some interval/update function, and the processor will take turns switching between different fibers every loop.
 
-```
+```haxe
 function think(self:Entity):Fiber<Int>
 {
     // some long-running algorithm
@@ -104,7 +104,7 @@ See [AsyncSugaredExamples](test/AsyncSugaredExamples.hx) for the examples that u
 
 Running the async examples:
 
-```
+```bash
 haxe -main AsyncSugaredExamples -cp src -cp test -neko async.n
 neko async
 ```
@@ -115,7 +115,7 @@ To make a function resummable, I need to transform the function into a form that
 
 So I have to turn a function from something that looks like this:
 
-```
+```haxe
 function hello()
 {
     @yield "a";
@@ -126,7 +126,7 @@ function hello()
 
 Into a function that looks something like this:
 
-```
+```haxe
 function hello()
 {
     var __state = 0;
