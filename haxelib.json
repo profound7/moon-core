@@ -1,0 +1,14 @@
+{
+    "name": "moon-core",
+    "license": "MIT",
+    "tags": ["cross","utility"],
+    "description": "utility library for various things.",
+    "contributors": ["profound7"],
+    "releasenote": "Update for Haxe 3.2",
+    "version": "1.0.0",
+    "url": "https://github.com/profound7/moon-core",
+    "classPath": "src",
+    "dependencies": 
+    {
+    }
+}

@@ -1,0 +1,148 @@
+{
+    "meta":
+    {
+        "name": "moon-core",
+        "license": "MIT",
+        "tags": ["cross", "utility"],
+        "description": "general utility library for haxe projects",
+        "contributors": ["profound7"],
+        "releasenote": "First release",
+        "version": "0.1.0",
+        "url": "https://github.com/profound7/moon-core",
+        "classPath": "src/"
+    },
+    
+    "build":
+    {
+        "@hxproj-main": "core.hxproj",
+        "-cp": ["src", "test"],
+        "-D": ["server"],
+        "-v": false,
+        
+        "cpp":
+        {
+            //"-D": "HXCPP_M64",
+            "-D": "HXCPP_MULTI_THREADED",
+            "-cpp": "bin/cpp"
+        },
+        
+        "cs":
+        {
+            "-cs": "bin/cs"
+        },
+        
+        "flash":
+        {
+            "-swf-version": "11",
+            "-swf": "bin/flash/app.swf"
+        },
+        
+        "java":
+        {
+            "-java": "bin/java"
+        },
+        
+        "javascript":
+        {
+            "-js": "bin/js/app.js"
+        },
+        
+        "neko":
+        {
+            "-neko": "bin/neko/app.n",
+            "-xml": "doc/xml/neko.xml"
+        },
+        
+        "php":
+        {
+            "-php": "bin/php"
+        },
+        
+        "python":
+        {
+            "-python": "bin/python/app.py"
+        },
+        
+        // aliases
+        "c++":          ["cpp"],
+        "c#":           ["cs"],
+        "flash player": ["flash"],
+        "swf":          ["flash"],
+        "js":           ["javascript"],
+        "n":            ["neko"],
+        "py":           ["python"],
+        
+        "all":
+        [
+            "cpp", "cs", "flash", "java",
+            "js", "neko", "php", "python"
+        ]
+    },
+    
+    "run":
+    {
+        "message": "Usage: hx run [target]",
+        
+        "cpp":
+        [
+            ["cd", "bin", "cpp"],
+            ["println", ["@hxproj-main"]]
+        ],
+        
+        "cs":
+        [
+            ["cd", "bin", "cs"],
+            ["println", ["@hxproj-main"]]
+        ],
+        
+        "flash":
+        [
+            ["start", "", "bin/js/app.swf"]
+        ],
+        
+        "java":
+        [
+            ["cd", "bin", "java"],
+            //["#java", "-jar", ["+", ["@hxproj-main"], ".jar"]],
+            ["println", ["@hxproj-main"]]
+        ],
+        
+        "javascript":
+        [
+            ["start", "", "bin/js/index.html"]
+        ],
+        
+        "neko":
+        [
+            ["cd", "bin", "neko"],
+            ["#neko", "app.n"]
+        ],
+        
+        "php":
+        [
+            ["cd", "bin", "php"],
+            ["#php", "index.php"]
+        ],
+        
+        "python":
+        [
+            ["cd", "bin", "python"],
+            ["#python", "app.py"]
+        ],
+        
+        // aliases
+        "c++":          [["cpp"]],
+        "c#":           [["cs"]],
+        "flash player": [["flash"]],
+        "swf":          [["flash"]],
+        "js":           [["javascript"]],
+        "n":            [["neko"]],
+        "py":           [["python"]],
+        
+        // hx run without arguments
+        "main":
+        [
+            ["println", ["message"]]
+        ]
+    }
+}
