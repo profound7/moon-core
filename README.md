@@ -94,7 +94,7 @@ function greet(a:Int, b:String):Generator<Int, String>
         if (i == 5)
             trace("yo" + @yield 999);
         else
-            trace(b + @yield vv);
+            trace(b + @yield i);
     }
 }
 
