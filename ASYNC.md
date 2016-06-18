@@ -71,10 +71,11 @@ function think(self:Entity):Fiber<Int>
     var i = 0;
     for (e1 in entities)
         for (e2 in entities)
+        {
+            self.doSomething(e1, e2);
             if (++i % 10 == 0)
                 @yield i; // allow other fibers to run
-            else
-                self.doSomething(e1, e2);
+        }
 }
 
 // these fibers are automatically added to Processor.main
@@ -181,9 +182,11 @@ Before it becomes:
 
 ```haxe
 var a0 = a;
-var a1 = b();
+var a1 = bar();
 var a2 = { __current = 123; @state next; return; @label next; __yielded; };
 foo(a0, a1, a2);
 ```
 
 All the scopes will then be merged and flattened, and cut up into switch cases at every `@label`.
+
+Here's an example of all the [transformations that a fibonacci function goes through](https://gist.github.com/profound7/0408725cc82068a3019ad1a3b7beacf6).

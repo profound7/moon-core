@@ -132,10 +132,11 @@ function think(self:Entity):Fiber<Int>
     var i = 0;
     for (e1 in entities)
         for (e2 in entities)
+        {
+            self.doSomething(e1, e2);
             if (++i % 10 == 0)
                 @yield i; // allow other fibers to run
-            else
-                self.doSomething(e1, e2);
+        }
 }
 
 // these fibers are automatically added to Processor.main
