@@ -90,6 +90,7 @@ class SignalMacro
             
             
             // public inline function next():Future<Tuple<T0, T1, T2...>>
+            #if (haxe_ver >= 3.3)
             fields.push(
             {
                 name: "next",
@@ -113,6 +114,7 @@ class SignalMacro
                 }),
                 pos: pos,
             });
+            #end
             
             // class Signal0 extends SignalBase<Void->Void>
             // class Signal1<T0> extends SignalBase<T0->Void>

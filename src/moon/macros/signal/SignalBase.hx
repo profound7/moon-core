@@ -10,12 +10,18 @@ import moon.core.Future;
 class SignalBase<T:Function>
 {
     public var slots(default, null):SlotList<T>;
+    
+    #if (haxe_ver >= 3.3)
     private var futures:Array<Future<Array<Dynamic>>>;
+    #end
     
     public function new() 
     {
         slots = new SlotList<T>();
+        
+        #if (haxe_ver >= 3.3)
         futures = [];
+        #end
     }
     
     /**
@@ -61,10 +67,13 @@ class SignalBase<T:Function>
      */
     public function dynamicDispatch(values:Array<Dynamic>):Void
     {
+        #if (haxe_ver >= 3.3)
         for (f in futures)
         {
             f.complete(values);
         }
+        futures = [];
+        #end
         
         for (s in slots)
         {
@@ -76,10 +85,10 @@ class SignalBase<T:Function>
             }
         }
         
-        futures = [];
         slots.cleanup();
     }
     
+    #if (haxe_ver >= 3.3)
     /**
      * Return a Future that will trigger the next time this
      * Signal is triggered.
@@ -90,4 +99,5 @@ class SignalBase<T:Function>
         futures.push(f);
         return f;
     }
+    #end
 }
