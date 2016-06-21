@@ -23,7 +23,7 @@
     <option directives="" />
     <option flashStrict="False" />
     <option noInlineOnDebug="False" />
-    <option mainClass="AsyncSugaredExamples" />
+    <option mainClass="ColorTest" />
     <option enabledebug="False" />
     <option additional="" />
   </build>
@@ -38,7 +38,7 @@
     <compile path="test\moon\ExampleTest.hx" />
     <compile path="test\moon\db\DatabaseTest.hx" />
     <compile path="test\Lala.hx" />
-    <compile path="test\AsyncSugaredExamples.hx" />
+    <compile path="test\ColorTest.hx" />
   </compileTargets>
   <!-- Paths to exclude from the Project Explorer tree -->
   <hiddenPaths>

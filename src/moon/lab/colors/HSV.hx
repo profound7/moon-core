@@ -2,19 +2,28 @@ package moon.lab.colors;
 
 import moon.numbers.geom.Vec4;
 
+using moon.tools.FloatTools;
+
 /**
- * hue:         0-360
- * saturation:  0.0-1.0
- * value:       0-255
+ * hue:         0.0 - 1.0       where 1.0 = 360deg
+ * saturation:  0.0 - 1.0
+ * value:       0.0 - 1.0
+ * 
  * @author Munir Hussin
  */
 abstract HSV(Vec4) to Vec4 from Vec4
 {
+    private static inline var DEG_60 = 60.0 / 360.0;
+    private static inline var DEG_360 = 1.0;
+    
     public var h(get, set):Float;
     public var s(get, set):Float;
     public var v(get, set):Float;
     public var a(get, set):Float;
     
+    /**
+     * Values h, s, v, a are normalized between 0 and 1.
+     */
     public function new(h:Float=0.0, s:Float=0.0, v:Float=0.0, a:Float=1.0) 
     {
         this = new Vec4(h, s, v, a);
@@ -45,8 +54,10 @@ abstract HSV(Vec4) to Vec4 from Vec4
     @:to public function toRGB():RGB
     {
         var hsv:HSV = this;
-        var d:Float = (hsv.h % 360) / 60;
+        
+        var d:Float = (hsv.h % DEG_360) / DEG_60;
         if (d < 0) d += 6;
+        
         var hf:Int = Math.floor(d);
         var hi:Int = hf % 6;
         var f:Float = d - hf;
@@ -75,7 +86,11 @@ abstract HSV(Vec4) to Vec4 from Vec4
     
     @:to public inline function toString():String
     {
-        return "hsva" + this.toString();
+        var h = Math.round(h * 360.0);
+        var s = Math.round(s * 100.0);
+        var v = Math.round(v * 100.0);
+        var a = a.round(2);
+        return 'hsva($h, $s%, $v%, $a)';
     }
     
     public inline function toHTML():String

@@ -2,8 +2,9 @@ package moon.lab.colors;
 
 /**
  * 32bit int as color.
- * Compared to RGB, HSL and HSV, Color uses the smallest memory (a single Int as
- * opposed to four Floats -- 256bits on many targets!).
+ * 
+ * Compared to RGB, HSL and HSV, Color uses the smallest memory -- a single Int (4 bytes) as
+ * opposed to four Floats (32 bytes).
  * However, it has the smallest precision.
  * 
  * For calculations where interpolation or calculations between colors are needed,
@@ -13,43 +14,81 @@ package moon.lab.colors;
  */
 abstract Color(Int) to Int from Int
 {
+    public var r(get, set):Int;
+    public var g(get, set):Int;
+    public var b(get, set):Int;
+    public var a(get, set):Int;
     
     public inline function new(c:Color=0)
     {
         this = c;
     }
     
-    public static inline function fromRGB(r:Float, g:Float, b:Float, a:Float=1.0):Color
-    {
-        return
-            (Math.round(a * 255) << 24) |
-            (Math.round(r * 255) << 16) |
-            (Math.round(g * 255) <<  8) |
-            (Math.round(b * 255));
-    }
+    /*==================================================
+        Properties
+    ==================================================*/
     
-    public static inline function fromHSV(h:Float, s:Float, v:Float, a:Float=1.0):Color
-    {
-        return new HSV(h, s, v, a).toRGB().toColor();
-    }
-    
-    public static inline function fromHSL(h:Float, s:Float, l:Float, a:Float=1.0):Color
-    {
-        return new HSL(h, s, l, a).toRGB().toColor();
-    }
+    private inline function get_r():Int return (this >> 16) & 255;
+    private inline function get_g():Int return (this >> 8) & 255;
+    private inline function get_b():Int return (this & 255);
+    private inline function get_a():Int return (this >> 24) & 255;
+    private inline function set_r(v:Int):Int { this = fromBytes(v, g, b, a); return v; };
+    private inline function set_g(v:Int):Int { this = fromBytes(r, v, b, a); return v; };
+    private inline function set_b(v:Int):Int { this = fromBytes(r, g, v, a); return v; };
+    private inline function set_a(v:Int):Int { this = fromBytes(r, g, b, v); return v; };
     
     /*==================================================
         Conversions
     ==================================================*/
     
+    /**
+     * All arguments are between 0 to 255 inclusive
+     */
+    public static inline function fromBytes(r:Int, g:Int, b:Int, a:Int=255):Color
+    {
+        return
+            (a << 24) |
+            (r << 16) |
+            (g <<  8) |
+            (b);
+    }
+    
+    /**
+     * All arguments are normalized between 0 to 1
+     */
+    public static inline function fromRGB(r:Float, g:Float, b:Float, a:Float=1.0):Color
+    {
+        return fromBytes(
+            Math.round(r * 255),
+            Math.round(g * 255),
+            Math.round(b * 255),
+            Math.round(a * 255));
+    }
+    
+    /**
+     * All arguments are normalized between 0 to 1
+     */
+    public static inline function fromHSV(h:Float, s:Float, v:Float, a:Float=1.0):Color
+    {
+        return new HSV(h, s, v, a).toRGB().toColor();
+    }
+    
+    /**
+     * All arguments are normalized between 0 to 1
+     */
+    public static inline function fromHSL(h:Float, s:Float, l:Float, a:Float=1.0):Color
+    {
+        return new HSL(h, s, l, a).toRGB().toColor();
+    }
+    
+    @:to public function toBytes():Array<Int>
+    {
+        return [r, g, b, a];
+    }
+    
     @:to public inline function toRGB():RGB
     {
-        return new RGB(
-            ((this >> 16) & 255) / 255,
-            ((this >> 8) & 255) / 255,
-            (this & 255) / 255,
-            ((this >> 24) & 255) / 255
-        );
+        return new RGB(r / 255, g / 255, b / 255, a / 255);
     }
     
     @:to public inline function toHSL():HSL
