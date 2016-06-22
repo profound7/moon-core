@@ -29,7 +29,7 @@ class FloatTools
     /**
      * Clamps the value `v` to be between `lo` and `hi`
      */
-    public static inline function clamp(v:Float, lo:Float, hi:Float):Float
+    public static inline function clamp<T:Float>(v:T, lo:T, hi:T):T
     {
         return
             if (v <= lo)
@@ -43,21 +43,23 @@ class FloatTools
     /**
      * If truncate is false, round() will be called on the value, otherwise trunc()
      * is called instead.
+     * 
+     * `d` is the number of decimal places to display
      */
-    public static function format(v:Float, sf:Int=0, truncate:Bool=false):String
+    public static function format(v:Float, d:Int=0, truncate:Bool=false):String
     {
-        var fnum = Std.string(truncate ? trunc(v, sf) : round(v, sf));
+        var fnum = Std.string(truncate ? trunc(v, d) : round(v, d));
         var fpos = fnum.indexOf(".");
         var fdec = "";
         
         if (fpos != -1)
         {
-            fdec = fnum.substr(fpos + 1, sf);
+            fdec = fnum.substr(fpos + 1, d);
             fnum = fnum.substr(0, fpos);
         }
         
-        //return fnum + "." + Text.of(fdec).rpad("0", sf);
-        return fnum + "." + fdec.rpad("0", sf);
+        //return fnum + "." + Text.of(fdec).rpad("0", d);
+        return fnum + "." + fdec.rpad("0", d);
     }
     
     /**

@@ -1,124 +1,168 @@
 package moon.lab.colors;
 
+import moon.lab.colors.formats.RGB888;
+import moon.lab.colors.modes.HSL;
+import moon.lab.colors.modes.RGB;
+
+using moon.tools.FloatTools;
+
 /**
- * 32bit int as color.
- * 
- * Compared to RGB, HSL and HSV, Color uses the smallest memory -- a single Int (4 bytes) as
- * opposed to four Floats (32 bytes).
- * However, it has the smallest precision.
- * 
- * For calculations where interpolation or calculations between colors are needed,
- * use RGB, HSL or HSV for smoother results.
- * 
  * @author Munir Hussin
  */
-abstract Color(Int) to Int from Int
+@:forward abstract Color(ColorInternal) to ColorInternal from ColorInternal
 {
-    public var r(get, set):Int;
-    public var g(get, set):Int;
-    public var b(get, set):Int;
-    public var a(get, set):Int;
-    
-    public inline function new(c:Color=0)
-    {
-        this = c;
-    }
-    
-    /*==================================================
-        Properties
-    ==================================================*/
-    
-    private inline function get_r():Int return (this >> 16) & 255;
-    private inline function get_g():Int return (this >> 8) & 255;
-    private inline function get_b():Int return (this & 255);
-    private inline function get_a():Int return (this >> 24) & 255;
-    private inline function set_r(v:Int):Int { this = fromBytes(v, g, b, a); return v; };
-    private inline function set_g(v:Int):Int { this = fromBytes(r, v, b, a); return v; };
-    private inline function set_b(v:Int):Int { this = fromBytes(r, g, v, a); return v; };
-    private inline function set_a(v:Int):Int { this = fromBytes(r, g, b, v); return v; };
-    
-    /*==================================================
-        Conversions
-    ==================================================*/
+    public static inline var Red = 0xFFFF0000;
+    public static inline var Green = 0xFF00FF00;
+    public static inline var Blue = 0xFF0000FF;
     
     /**
-     * All arguments are between 0 to 255 inclusive
+     * using moon.lab.colors.Color;
+     * ...
+     * var cmyk:CMYK = new CMYK(0.1, 0.2, 0.3, 0.4);
+     * var hsl:HSL = cmyk.convert(HSL);
      */
-    public static inline function fromBytes(r:Int, g:Int, b:Int, a:Int=255):Color
+    public static function convert<T:IColorMode, U:IColorMode>(color:T, mode:Class<U>):U
     {
-        return
-            (a << 24) |
-            (r << 16) |
-            (g <<  8) |
-            (b);
+        var out:U = Type.createEmptyInstance(mode);
+        
+        out.setRGB(color.getRGB());
+        
+        if (out.hasAlpha)
+            out.alpha = color.alpha;
+            
+        return out;
     }
     
-    /**
-     * All arguments are normalized between 0 to 1
-     */
-    public static inline function fromRGB(r:Float, g:Float, b:Float, a:Float=1.0):Color
+    @:from public static function fromColorMode(mode:IColorMode):Color
     {
-        return fromBytes(
-            Math.round(r * 255),
-            Math.round(g * 255),
-            Math.round(b * 255),
-            Math.round(a * 255));
-    }
-    
-    /**
-     * All arguments are normalized between 0 to 1
-     */
-    public static inline function fromHSV(h:Float, s:Float, v:Float, a:Float=1.0):Color
-    {
-        return new HSV(h, s, v, a).toRGB().toColor();
-    }
-    
-    /**
-     * All arguments are normalized between 0 to 1
-     */
-    public static inline function fromHSL(h:Float, s:Float, l:Float, a:Float=1.0):Color
-    {
-        return new HSL(h, s, l, a).toRGB().toColor();
-    }
-    
-    @:to public function toBytes():Array<Int>
-    {
-        return [r, g, b, a];
-    }
-    
-    @:to public inline function toRGB():RGB
-    {
-        return new RGB(r / 255, g / 255, b / 255, a / 255);
-    }
-    
-    @:to public inline function toHSL():HSL
-    {
-        return toRGB().toHSL();
-    }
-    
-    @:to public inline function toHSV():HSV
-    {
-        return toRGB().toHSV();
-    }
-    
-    @:to public inline function toString():String
-    {
-        return "#" + toHex();
-    }
-    
-    public inline function toHex(withAlpha:Bool=true):String
-    {
-        return withAlpha ? StringTools.hex(this, 8) : StringTools.hex(this, 8).substr(2);
-    }
-    
-    public inline function toHTML():String
-    {
-        return "#" + toHex(false);
-    }
-    
-    public inline function toLiteral(withAlpha:Bool=true):String
-    {
-        return "0x" + toHex(withAlpha);
+        return new ColorInternal(mode);
     }
 }
 
+
+
+private class ColorInternal
+{
+    public var color(get, set):IColorMode;
+    public var alpha(get, set):Float;
+    
+    private var original:IColorMode;
+    private var tmp:IColorMode;
+    
+    
+    public function new(color:IColorMode)
+    {
+        this.color = color;
+    }
+    
+    private function get_color():IColorMode
+    {
+        changeMode(Type.getClass(original));
+        
+        if (tmp.hasAlpha)
+            tmp.alpha = original.alpha;
+            
+        return tmp;
+    }
+    
+    private function set_color(color:IColorMode):IColorMode
+    {
+        return original = tmp = color;
+    }
+    
+    private function get_alpha():Float
+    {
+        return original.alpha;
+    }
+    
+    private function set_alpha(alpha:Float):Float
+    {
+        return original.alpha = alpha;
+    }
+    
+    
+    private function changeMode<T:IColorMode>(mode:Class<IColorMode>):T
+    {
+        if (!Std.is(tmp, mode))
+        {
+            //trace("changed mode");
+            tmp = Color.convert(tmp, mode);
+        }
+        return cast tmp;
+    }
+    
+    public function rotate(turn:Float):Color
+    {
+        var hsl:HSL = changeMode(HSL);
+        hsl.h = (hsl.h + turn) % 1.0;
+        tmp = hsl;
+        return this;
+    }
+    
+    public function lighten(ratio:Float):Color
+    {
+        var hsl:HSL = changeMode(HSL);
+        hsl.l = (hsl.l + hsl.l * ratio).clamp(0.0, 1.0);
+        tmp = hsl;
+        return this;
+    }
+    
+    public function darken(ratio:Float):Color
+    {
+        var hsl:HSL = changeMode(HSL);
+        hsl.l = (hsl.l - hsl.l * ratio).clamp(0.0, 1.0);
+        tmp = hsl;
+        return this;
+    }
+    
+    public function saturate(ratio:Float):Color
+    {
+        var hsl:HSL = changeMode(HSL);
+        hsl.s = (hsl.s + hsl.s * ratio).clamp(0.0, 1.0);
+        tmp = hsl;
+        return this;
+    }
+    
+    public function desaturate(ratio:Float):Color
+    {
+        var hsl:HSL = changeMode(HSL);
+        hsl.s = (hsl.s - hsl.s * ratio).clamp(0.0, 1.0);
+        tmp = hsl;
+        return this;
+    }
+    
+    
+    public function opaquer(ratio:Float):Color
+    {
+        original.alpha = (original.alpha + (original.alpha * ratio)).clamp(0.0, 1.0);
+        return this;
+    }
+    
+    public function clearer(ratio:Float):Color
+    {
+        original.alpha = (original.alpha - (original.alpha * ratio)).clamp(0.0, 1.0);
+        return this;
+    }
+    
+    
+    
+    public function toString():String
+    {
+        return color.toString();
+    }
+    
+    public function toHTML():String
+    {
+        var c = color;
+        return switch (Type.getClass(c))
+        {
+            case RGB | HSL | RGBA | HSLA | RGB888:
+                c.toString();
+                
+            case _:
+                c.hasAlpha ?
+                    Color.convert(c, RGBA).toString():
+                    Color.convert(c, RGB).toString();
+        }
+    }
+}

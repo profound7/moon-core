@@ -4,6 +4,7 @@ package moon.tools;
  * ...
  * @author Munir Hussin
  */
+@:deprecated
 class IntTools
 {
     
