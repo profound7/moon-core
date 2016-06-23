@@ -1,3 +1,6 @@
+__tmp*.hxml
+!.gitignore
+
 # Directories #
 ###############
 /bin
