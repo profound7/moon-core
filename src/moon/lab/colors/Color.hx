@@ -3,6 +3,7 @@ package moon.lab.colors;
 import moon.lab.colors.formats.RGB888;
 import moon.lab.colors.modes.HSL;
 import moon.lab.colors.modes.RGB;
+import moon.lab.colors.modes.YUV;
 
 using moon.tools.FloatTools;
 
@@ -40,11 +41,30 @@ using moon.tools.FloatTools;
 }
 
 
-
+/**
+ * http://stackoverflow.com/a/596241/3761791
+ * approximation of luminance
+ * 
+ * Y = 0.2126 R + 0.7152 G + 0.0722 B
+ * 
+ * Y = (R+R+B+G+G+G)/6
+ * or
+ * Y = (R+R+R+B+G+G+G+G)>>3
+ * 
+ * 00000000 00000000 00000000 00000000
+ * RRRRRRRG GGGGGGGG GGGGGGGG GGGGGGBB      R7G23B2
+ * 
+ * 00000000 00000000 00000000
+ * RRRRRGGG GGGGGGGG GGGGGGBB               R5G17B2
+ * 
+ * 00000000
+ * RRRGGGBB
+ */
 private class ColorInternal
 {
     public var color(get, set):IColorMode;
     public var alpha(get, set):Float;
+    //public var luminosity(get, set):Float;
     
     private var original:IColorMode;
     private var tmp:IColorMode;
@@ -54,6 +74,10 @@ private class ColorInternal
     {
         this.color = color;
     }
+    
+    /*==================================================
+        Properties
+    ==================================================*/
     
     private function get_color():IColorMode
     {
@@ -75,11 +99,26 @@ private class ColorInternal
         return original.alpha;
     }
     
-    private function set_alpha(alpha:Float):Float
+    private function set_alpha(value:Float):Float
     {
-        return original.alpha = alpha;
+        return original.alpha = value;
     }
     
+    /*private function get_luminosity():Float
+    {
+        var yuv:YUV = changeMode(YUV);
+        return yuv.y;
+    }
+    
+    private function set_luminosity(value:Float):Float
+    {
+        var yuv:YUV = changeMode(YUV);
+        return yuv.y = value;
+    }*/
+    
+    /*==================================================
+        Methods
+    ==================================================*/
     
     private function changeMode<T:IColorMode>(mode:Class<IColorMode>):T
     {
@@ -131,7 +170,6 @@ private class ColorInternal
         return this;
     }
     
-    
     public function opaquer(ratio:Float):Color
     {
         original.alpha = (original.alpha + (original.alpha * ratio)).clamp(0.0, 1.0);
@@ -144,7 +182,40 @@ private class ColorInternal
         return this;
     }
     
+    /**
+     * relative luminance
+     * https://www.w3.org/TR/WCAG20/#relativeluminancedef
+     */
+    public function luminance():Float
+    {
+        var rgb:RGB = changeMode(RGB);
+        var r = (rgb.r <= 0.03928) ? rgb.r / 12.92 : Math.pow((rgb.r + 0.055) / 1.055, 2.4);
+        var g = (rgb.g <= 0.03928) ? rgb.g / 12.92 : Math.pow((rgb.g + 0.055) / 1.055, 2.4);
+        var b = (rgb.b <= 0.03928) ? rgb.b / 12.92 : Math.pow((rgb.b + 0.055) / 1.055, 2.4);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
     
+    /**
+     * contrast ratio with another color.
+     * contrast ratio ranges from 1 (same color) to 21 (black and white)
+     * https://www.w3.org/TR/WCAG20/#contrast-ratiodef
+     */
+    public function contrast(other:Color):Float
+    {
+        var y1 = this.luminance();
+        var y2 = other.luminance();
+        return y1 > y2 ? (y1 + 0.05) / (y2 + 0.05) : (y2 + 0.05) / (y1 + 0.05);
+    }
+    
+    public inline function isLight():Bool
+    {
+        return luminance() > 0.5;
+    }
+    
+    public inline function isDark():Bool
+    {
+        return !isLight()
+    }
     
     public function toString():String
     {

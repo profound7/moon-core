@@ -18,18 +18,16 @@ class ColorTest
     
     public static function main()
     {
-        var a:Color = new RGB888(0xaabbcc);
+        var a:Color = new RGB(0, 0, 0);
+        var b:Color = new RGB(1, 1, 1);
         
         trace(a);
+        trace(b);
+        trace(a.contrast(b));
+        trace(a.isLight());
+        trace(b.isLight());
         
-        a.lighten(0.1);
         
-        
-        trace(a);
-        trace(a.toHTML());
-        
-        var x = Hue.magenta(0);
-        trace(x * 360);
     }
     
 }

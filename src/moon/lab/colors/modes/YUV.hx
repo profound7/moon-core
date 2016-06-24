@@ -8,7 +8,7 @@ using moon.tools.FloatTools;
 class YUV implements IColorMode
 {
     public static var wr = 0.299;
-    public static var wg = 1 - wr - wb;       // 1 - wr - wb == 0.587
+    public static var wg = 0.587;       // 1 - wr - wb == 0.587
     public static var wb = 0.114;
     public static var umax = 0.436;
     public static var vmax = 0.615;
