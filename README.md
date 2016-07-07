@@ -307,6 +307,7 @@ I need help to iron out some issues related to the async stuff.
 - It's possible to further optimize the result of transforming the generator function.
     - If you'd like to see the output of the various passes involved in transforming the generator function, open `moon.macros.async.AsyncTransformer.hx` and change `DEBUG_OUTPUT_TO_FILE` to `true`.
 - Macro functions very unlikely to work within generator functions
+- Generator functions within generator functions not properly working
 - Unit tests, and ensure it works on all platforms
     - currently only tested in neko
 
