@@ -17,7 +17,7 @@ using moon.macros.tools.TypedExprTools;
  */
 class AsyncTransformer
 {
-    public static var DEBUG_OUTPUT_TO_FILE:Bool = true;
+    public static var DEBUG_OUTPUT_TO_FILE:Bool = false;
     
     public var nextVarId:Int;
     public var nextLabelId:Int;
