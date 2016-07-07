@@ -98,8 +98,8 @@ class AsyncSugaredExamples
     {
         //methodExample();
         //simpleExample();
-        customWrapperExample();
-        //awaitExample();
+        //customWrapperExample();
+        awaitExample();
         //tryExample();
         //permutationsExample();
         //nestedExample();
