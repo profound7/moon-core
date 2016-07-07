@@ -4,10 +4,10 @@
         "name": "moon-core",
         "license": "MIT",
         "tags": ["cross", "utility"],
-        "description": "general utility library for haxe projects",
+        "description": "Utility library for a bunch of stuff. Also generator functions, fibers, yield, await.",
         "contributors": ["profound7"],
-        "releasenote": "First release",
-        "version": "0.1.0",
+        "releasenote": "Improved async stuff. Added await expression, custom async types. Switch and try/catch now works within generators.",
+        "version": "1.1.0",
         "url": "https://github.com/profound7/moon-core",
         "classPath": "src/"
     },
