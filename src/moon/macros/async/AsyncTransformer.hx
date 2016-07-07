@@ -8,6 +8,7 @@ import sys.io.File;
 
 using haxe.macro.Tools;
 using moon.macros.async.AsyncMacroTools;
+using moon.macros.tools.TypedExprTools;
 
 /**
  * Transforms a regular function into a resummable function.
@@ -16,12 +17,14 @@ using moon.macros.async.AsyncMacroTools;
  */
 class AsyncTransformer
 {
-    public static var DEBUG_OUTPUT_TO_FILE:Bool = false;
+    public static var DEBUG_OUTPUT_TO_FILE:Bool = true;
     
     public var nextVarId:Int;
     public var nextLabelId:Int;
-    public var vars:Array<String>;
+    public var vars:Array<Var>;
+    public var sets:Array<Var>;
     public var labels:Array<String>;
+    public var varInfo:VarInfo;
     
     public var name:String;
     public var fn:Function;
@@ -44,6 +47,8 @@ class AsyncTransformer
     
     public function new(name:String, fn:Function, pos:Position)
     {
+        trace("---"); trace("---");
+        
         this.name = name;
         this.fn = fn;
         this.pos = pos;
@@ -51,14 +56,15 @@ class AsyncTransformer
         this.nextVarId = 0;
         this.nextLabelId = 0;
         this.vars = [];
+        this.sets = [];
         this.labels = [];
+        
+        this.varInfo = new VarInfo(fn.expr.pos);
         
         this.void = macro @void if (false) null;
         this.out = [];
         
         this.yieldOnly = true;
-        
-        //SignalMacro.create(1);
         
         returnType = fn.ret;
         
@@ -147,7 +153,7 @@ class AsyncTransformer
     
     public function nextVar(name:String):String
     {
-        var id = "__" + name + "_" + (++nextVarId);
+        var id = "__set_" + name + "_" + (++nextVarId);
         return id;
     }
     
@@ -158,9 +164,13 @@ class AsyncTransformer
     }
     
     
-    public function print(?comments:String, ?manyComments:Array<String>, e:Expr)
+    public function print(?comments:String, ?manyComments:Array<String>, ?e:Expr, ?te:TypedExpr)
     {
         #if !display
+            
+            if (te != null)
+                e = te.toExpr();
+            
             out.push("\n");
             
             if (comments != null)
@@ -216,11 +226,17 @@ class AsyncTransformer
         var e = fn.expr;
         print("original function", e);
         
+        // map the positions to tvars
+        e = preprocess();
+        print("typed expression", e);
+        
+        
+        
         e = pass_init(e);
         print("add label 0 (start state) and label -1 (end state)", e);
         
         Scope.init();
-        e = pass_var(e);
+        e = pass_var2(e);
         print("transform var statements", e);
         
         e = pass_structs(e);
@@ -247,6 +263,98 @@ class AsyncTransformer
     }
     
     
+    public function preprocess():Expr
+    {
+        // prepare a temporary fn expr so it can be typed
+        var eFunction = EFunction(name,
+        {
+            args: fn.args,
+            ret: fn.ret,
+            expr: macro { ${fn.expr}; return null; },
+            params: fn.params
+        }).pos(pos);
+        
+        
+        // replace @yield x with __yield__(x) so that when typed
+        // and if the meta disappear, we still have the yield keywords
+        function replaceYield(e:Expr):Expr
+        {
+            return switch (e)
+            {
+                case macro @yield $i{"$"}:
+                    macro __yield__();
+                    
+                case macro @yield $expr:
+                    expr = replaceYield(expr);
+                    macro __yield__($expr);
+                    
+                case macro @await $expr:
+                    expr = replaceYield(expr);
+                    macro __await__($expr);
+                    
+                case _:
+                    e.map(replaceYield);
+            }
+        }
+        
+        var yieldFn = nextType.isVoid() ?
+            (macro function __yield__():$sendType { throw "lol"; }):
+            (macro function __yield__(x:$nextType):$sendType { throw "lol"; });
+            
+        var awaitFn = macro function __await__<T>(x:moon.core.Future<T>):T { throw "lol"; };
+            
+        // prepend the yield function
+        var expr = macro
+        {
+            $yieldFn;
+            $awaitFn;
+            ${ replaceYield(eFunction) };
+        }
+        
+        // get the types of the expressions.
+        // fixes switch capture variable problem
+        // thanks Cauê Waneck!
+        TypedExprTools.exprPos = fn.expr.pos;
+        TypedExprTools.identifiers = new Map();
+        TypedExprTools.vars = new Map();
+        TypedExprTools.names = new Map();
+        
+        var te = Context.typeExpr(expr);
+        print("preprocessing", te);
+        varInfo.mapVars(te);
+        
+        // return the function expression without the yieldFn and awaitFn
+        te = varInfo.exprByPos.get(fn.expr.pos.getInfos().min);
+        return te.toExpr();
+        
+        /*var e = te.toExpr();
+        
+        return switch (e)
+        {
+            case macro { $yFn; $aFn; $eFn; }:
+                
+                switch (eFn.expr)
+                {
+                    // { var x:A->B = function(a:A):B {...}; x; }
+                    case EBlock([{ expr: EVars([{ expr: { expr:
+                        EFunction(_, { expr: { expr: EBlock(args) } })
+                    }}]) }, _]):
+                        
+                        args[0];
+                        
+                    // function() {...}
+                    case EFunction(_, { expr: { expr: EBlock(args) } }):
+                        args[0];
+                        
+                    case _:
+                        throw "unexpected " + eFn.expr;
+                }
+                
+            case _:
+                throw "unexpected " + e.expr;
+        }*/
+    }
+    
     
     public function final_pass(e:Expr):Expr
     {
@@ -257,6 +365,8 @@ class AsyncTransformer
         // declare state vars
         codes.push(macro var __started:Bool = false);
         codes.push(macro var __state:Int = 0);
+        codes.push(macro var __try:Array<Int> = []);
+        codes.push(macro var __caught:Dynamic = null);
         
         if (nextType == null)
             codes.push(macro var __current = $nextDef);
@@ -277,11 +387,23 @@ class AsyncTransformer
             
             
         // declare hoisted vars
-        for (v in vars)
+        for (v in TypedExprTools.vars)
         {
-            codes.push(macro var $v = null);
+            var name = v.name;
+            var ctype = v.type;
+            var val = ctype.getDefaultValue();
+            codes.push(macro var $name:$ctype = $val);
         }
-            
+        
+        // declare vars for expanded expressions (@set)
+        for (v in sets)
+        {
+            var name = v.name;
+            var ctype = v.type;
+            var val = ctype.getDefaultValue();
+            codes.push(macro var $name:$ctype = null);
+        }
+        
         // the async function
         codes.push(macro function __run():Void $e);
         
@@ -428,12 +550,165 @@ class AsyncTransformer
         };
     }
     
+    
     /**
      * This pass identifies all variable declarations for hoisting
      * later. It transforms the names, so 2 variable names will not
      * clash after being hoisted.
      */
-    public function pass_var(e:Expr):Expr
+    public function pass_var2(e:Expr):Expr
+    {
+        var recurse = pass_var2;
+        
+        return switch (e.expr)
+        {
+            case EMeta({ name: ":ast" }, expr):
+                recurse(expr);
+                
+            case EFunction(_, _):
+                e;
+                
+            case ECall({ expr: EConst(CIdent("__yield__"))}, [expr]):
+                macro @yield ${recurse(expr)};
+                
+            case ECall({ expr: EConst(CIdent("__await__"))}, [expr]):
+                expr = recurse(expr);
+                macro
+                {
+                    while ($expr.state == moon.core.Future.FutureState.Awaiting)
+                        @yield __current;
+                        
+                    switch ($expr.state)
+                    {
+                        case moon.core.Future.FutureState.Success(v): v;
+                        case moon.core.Future.FutureState.Failure(e): throw e;
+                        case moon.core.Future.FutureState.Awaiting: throw "assert";
+                    }
+                };
+                
+            case ETry(eBody, catches):
+                
+                eBody = recurse(eBody);
+                
+                var codes:Array<Expr> =
+                [
+                    macro __try.push(@addr catch_all),
+                    eBody,
+                    macro __try.pop(),
+                    macro @goto end_try,
+                ];
+                
+                for (i in 0...catches.length)
+                {
+                    var c = catches[i];
+                    //vars.push({ name: c.name, type: c.type, expr: null });
+                    var eCatch = recurse(c.expr);
+                    var name = c.name;
+                    var label = "catch_" + i;
+                    
+                    c.expr = macro @goto $i{label};
+                    c.name = "__ex";
+                    
+                    codes.push(macro @label $i{label});
+                    codes.push(macro
+                    {
+                        $i{name} = __caught;
+                        $eCatch;
+                        @goto end_try;
+                    });
+                }
+                
+                var eTry = { expr: ETry(macro throw __caught, catches), pos: e.pos };
+                
+                codes.push(macro @label catch_all);
+                codes.push(eTry);
+                codes.push(macro @label end_try);
+                
+                macro $b{codes};
+                
+                
+            case EVars(args):
+                
+                var codes = [];
+                
+                for (i in 0...args.length)
+                {
+                    var v = args[i];
+                    //var tv = varInfo.getVar(i, e.pos);
+                    
+                    if (v.expr != null)
+                    {
+                        //trace(getTVarName(tv));
+                        var expr = recurse(v.expr);
+                        //codes.push(macro $i{getTVarName(tv)} = $expr);
+                        
+                        //vars.push(v);
+                        codes.push(macro $i{v.name} = $expr);
+                    }
+                }
+                
+                codes.length == 0 ? void : macro $b{codes};
+                
+            /*case EFor(cond, body):
+                
+                switch (cond.expr)
+                {
+                    case EIn(v, it):
+                        
+                        switch (v.expr)
+                        {
+                            case EConst(CIdent(id)):
+                                
+                                var tv1 = varInfo.getLocal(e.pos); // for var
+                                var tv2 = varInfo.getLocal(v.pos); // const var
+                                it = recurse(it);
+                                body = recurse(body);
+                                
+                                //trace("FOR CONST " + id + " -- " + e.pos.getInfos().min);
+                                
+                                if (tv1 != null && tv1.name != "`")
+                                {
+                                    macro for ($i{getTVarName(tv1)} in $it) $body;
+                                }
+                                else if (tv2 != null)
+                                {
+                                    macro for ($i{getTVarName(tv2)} in $it) $body;
+                                }
+                                else
+                                {
+                                    e;
+                                }
+                                
+                            case _:
+                                throw "unsupported";
+                        }
+                        
+                    case _:
+                        throw "unsupported";
+                }*/
+                
+                
+            /*case EConst(CIdent(id)):
+                
+                var tv = varInfo.getLocal(e.pos);
+                //trace("CONST " + id + " -- " + e.pos.getInfos().min);
+                
+                if (tv != null)
+                {
+                    macro $i{getTVarName(tv)};
+                }
+                else
+                {
+                    e;
+                }*/
+                
+            case _:
+                e.map(recurse);
+        }
+    }
+    
+    // unused. replaced by pass_var2
+    /*public function pass_var(e:Expr):Expr
     {
         var recurse = pass_var;
         
@@ -496,7 +771,97 @@ class AsyncTransformer
             case _:
                 e.map(recurse);
         }
+    }*/
+    
+    
+    /**
+     * this determines if an Expr is a statement (void expr) or returns a value,
+     * so we can tell if the Expr can be used as a right-hand-side expression.
+     * 
+     * if (cond) 4 else 5;              // expr is rhs compatible
+     * if (cond) 4 else trace(x);       // not rhs compatible, since trace is Void
+     * if (cond) 4 else throw x;        // expr is rhs compatible
+     * if (cond) throw x else throw y;  // also rhs compatible
+     * 
+     * TODO: in a future refactor, this is unnecessary, as we can tell how to
+     * generate the code based on the parent expression
+     * 
+     *      i.e.
+     *      { if (c) t else f; x; }     // the if is definitely statement, although it an rhs-compatible expr
+     *      x = if (c) t else trace(f); // the if generates an rhs expr, although its void, since its used that way. rely on compiler error
+     *      { ...; if (c) t else f; }   // since if is last value in block, need to see block's parent
+     */
+    public function isVoidCheck(e:Expr):Bool
+    {
+        if (e == null) throw "expression is null";
+        var result = false;
+        var typedExpr = varInfo.exprByPos.get(e.pos.getInfos().min);
+        //trace("TE: " + typedExpr);
+        var typedCt = typedExpr != null ? typedExpr.t.toComplexType() : null;
+        
+        if (typedCt != null)
+        {
+            result = typedCt.isVoid(); // definitely correct
+        }
+        else
+        {
+            try
+            {
+                // doesn't always work since some variables are not available in context :(
+                var exprType = Context.typeof(e).toComplexType();
+                result = exprType.match(TPath({ name: "StdTypes", pack: [], params: [], sub: "Void" }));
+            }
+            catch (ex:Dynamic)
+            {
+                // make a guess, or get user to annotate in ambiguous cases
+                result = if (e == null) true else switch (e.expr)
+                {
+                    case EVars(_) | EFor(_, _) | EWhile(_, _, _) | EIf(_, _, null):
+                        true;
+                        
+                    case EBlock(a):
+                        // if length is 0, it should be parsed as EObjectDecl anyway.
+                        // type of block depends on the last expression of the block.
+                        a.length == 0 ? true : isVoidCheck(a[a.length - 1]);
+                        
+                    case ESwitch(_, cases, d):
+                        // if any case is a void type, then the switch is a void type
+                        for (c in cases)
+                            if (c.expr == null || isVoidCheck(c.expr))
+                                return true;
+                                
+                        // no default case implies an exhaustive cases array
+                        d == null ? false : isVoidCheck(d);
+                        
+                    case EIf(_, t, f):
+                        isVoidCheck(t) || isVoidCheck(f);
+                        
+                    // manual annotation by user
+                    case EMeta({ name: "void" }, _):
+                        true;
+                        
+                    // manual annotation by user
+                    case EMeta({ name: "expr" }, _):
+                        false;
+                        
+                    case EMeta(_, e):
+                        isVoidCheck(e);
+                        
+                    // ECall could be void or not. if the function is outside the generator function,
+                    // then Context.typeof above should work. Otherwise it may not, and you need
+                    // to add @void to the function call
+                    
+                    // assume everything else is an expression
+                    case _:
+                        false;
+                }
+            }
+        }
+        
+        //trace("VOID: " + result + " -- " + e.toString());
+        return result;
     }
+    
     
     /**
      * Convert control structures to a form that could be easily
@@ -523,27 +888,6 @@ class AsyncTransformer
      * statements. goto will be transformed into __state = number;
      * 
      */
-    /**
-        PARTIALLY DONE:
-        
-        
-        TODO:
-        
-        EIn( e1 : Expr, e2 : Expr );                // only works in for? then this is already handled
-        ETry( e : Expr, catches : Array<Catch> );   // i don't know how to transform this
-        EMeta( s : MetadataEntry, e : Expr );
-        
-        
-        NOT NEEDED:
-        EConst( c : Constant );
-        EBlock( exprs : Array<Expr> );
-        EVars( vars : Array<Var> );
-        EUntyped( e : Expr );
-        ECast( e : Expr, t : Null<ComplexType> );
-        EDisplay( e : Expr, isCall : Bool );
-        EDisplayNew( t : TypePath );
-        
-     **/
     public function pass_structs(e:Expr):Expr
     {
         //var recurse = function(e:Expr) return pass_structs(e, yieldOnly);
@@ -555,9 +899,10 @@ class AsyncTransformer
             case EFunction(_, _):
                 e; // stop and don't go deeper
                 
+                
             case EIf(eCond, eTrue, eFalse) | ETernary(eCond, eTrue, eFalse) if (containsYield(e)):
                 
-                var isVoid = e.isVoidExpr();
+                var isVoid = isVoidCheck(e);
                 
                 if (containsYield(eCond)) eCond = recurse(eCond);
                 if (containsYield(eTrue)) eTrue = recurse(eTrue);
@@ -627,15 +972,22 @@ class AsyncTransformer
                 // if the switch is an expression instead of a statement,
                 // we have to make sure the last expression of the block
                 // is the actual return value
-                var isVoid = e.isVoidExpr();
+                
+                /*var typedExpr = varInfo.exprByPos.get(e.pos.getInfos().min);
+                var type = typedExpr.t.toComplexType();
+                trace("SWITCH ", type);
+                
+                var isVoid = type == null ? e.isVoidExpr() : type.isVoid(); //: e.isVoidExpr();
+                isVoid = type == null || type.isVoid();*/
+                var isVoid = isVoidCheck(e);
                 
                 if (containsYield(eValue)) eValue = recurse(eValue);
                 if (containsYield(eDefault)) eDefault = recurse(eDefault);
                 
-                
                 var bodies:Array<Expr> = [];
-                
                 bodies.push(macro @goto end);
+                
+                
                 
                 for (i in 0...cases.length)
                 {
@@ -660,6 +1012,7 @@ class AsyncTransformer
                     
                     bodies.push(macro @label $i{label});
                     bodies.push(isVoid ? eCase : macro @set ret = $eCase);
+                    bodies.push(macro @goto end);
                     
                     c.expr = macro @goto $i{label};
                 }
@@ -1013,6 +1366,7 @@ class AsyncTransformer
                     }
                 }
                 
+                
             case EMeta({ name: "yield" }, eValue):
                 //trace(Context.typeof(macro { return; }).toComplexType());
                 //var yielded = sendType.isVoid() ? void : macro __yielded;
@@ -1035,14 +1389,28 @@ class AsyncTransformer
                 }
                 else
                 {
-                    return macro
+                    if (eValue.expr.match(EConst(CIdent("__current"))))
                     {
-                        __current = $eValue;
-                        @state next;
-                        return;
-                        
-                        @label next;
-                        $yielded;
+                        return macro
+                        {
+                            @state next;
+                            return;
+                            
+                            @label next;
+                            $yielded;
+                        }
+                    }
+                    else
+                    {
+                        return macro
+                        {
+                            __current = $eValue;
+                            @state next;
+                            return;
+                            
+                            @label next;
+                            $yielded;
+                        }
                     }
                 }
                 
@@ -1115,9 +1483,14 @@ class AsyncTransformer
                 //trace('@set $name');
                 rhs = recurse(rhs);
                 
-                var id:String = nextVar(name);
-                Scope.current.declare("$" + name, id);
-                vars.push(id);
+                var id:String = Scope.current.vars.get("$" + name);
+                
+                if (id == null)
+                {
+                    id = nextVar(name);
+                    Scope.current.declare("$" + name, id);
+                    sets.push({ name: id, type: null, expr: null });
+                }
                 
                 macro $i{id} = $rhs;
             #else
@@ -1128,9 +1501,14 @@ class AsyncTransformer
                 //trace('@set $name');
                 rhs = recurse(rhs);
                 
-                var id:String = nextVar(name);
-                Scope.current.declare("$" + name, id);
-                vars.push(id);
+                var id:String = Scope.current.vars.get("$" + name);
+                
+                if (id == null)
+                {
+                    id = nextVar(name);
+                    Scope.current.declare("$" + name, id);
+                    sets.push({ name: id, type: null, expr: null });
+                }
                 
                 macro $i{id} = $rhs;
             #end
@@ -1143,6 +1521,18 @@ class AsyncTransformer
                     macro $i{id};
                 else
                     throw '@get: $name does not exist';
+                    
+            case EMeta({ name: "addr" }, { expr: EConst(CIdent(name)) }):
+                
+                if (Scope.current.exists("#" + name))
+                {
+                    var id:String = Scope.current.get("#" + name);
+                    macro @addr $i{id};
+                }
+                else
+                {
+                    throw '@label $name does not exist';
+                }
                 
             case EMeta({ name: "goto" }, { expr: EConst(CIdent(name)) }):
                 
@@ -1302,6 +1692,12 @@ class AsyncTransformer
             case EFunction(_, _):
                 e; // stop and don't go deeper
                 
+            case EMeta({ name: "addr" }, { expr: EConst(CIdent(id)) }):
+                if (labels.exists(id))
+                    macro $v{labels.get(id)};
+                else
+                    throw 'addr label $id does not exist';
+                
             case EMeta({ name: "goto" }, { expr: EConst(CIdent(id)) }):
                 if (labels.exists(id))
                     macro { __state = $v{labels.get(id)}; continue; };
@@ -1359,7 +1755,22 @@ class AsyncTransformer
                         }
                         
                         if (currCase != null) cases.push(currCase);
-                        return macro while (true) { $sw; ++__state; };
+                        return macro while (true)
+                        try
+                        {
+                            $sw;
+                            ++__state;
+                        }
+                        catch (ex:Dynamic)
+                        {
+                            if (__try.length == 0)
+                                throw ex;
+                            else
+                            {
+                                __caught = ex;
+                                __state = __try.pop();
+                            }
+                        };
                         
                     case _:
                         throw "oh noes";
@@ -1438,4 +1849,3 @@ private class Scope
         vars.set(k, v);
     }
 }
-

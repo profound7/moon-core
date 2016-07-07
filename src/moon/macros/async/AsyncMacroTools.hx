@@ -94,7 +94,7 @@ class AsyncExprTools
         {
             switch (e.expr)
             {
-                case EMeta({ name: "yield" }, _):
+                case EMeta({ name: "yield" | "await" }, _):
                     foundYield = true;
                     
                 case EFunction(_, _):

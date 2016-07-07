@@ -100,6 +100,14 @@ class StatTools
     
     public static inline function mean<T>(data:Array<T>, value:T->Float):Float
     {
+        // arithmetic mean without overflow
+        /*var avg:Float = 0.0;
+        var n:Int = 1;
+        
+        for (d in data)
+            avg += (value(d) - avg) / n++;
+        return avg;*/
+        
         return data.sum(value) / data.length;
     }
     

@@ -9,6 +9,12 @@ import moon.lab.colors.modes.HSV;
 
 using moon.lab.colors.Color;
 
+enum Foo
+{
+    Bar;
+    Baz(a:String);
+}
+
 /**
  * ...
  * @author Munir Hussin
@@ -20,6 +26,10 @@ class ColorTest
     {
         var a:Color = new RGB(0, 0, 0);
         var b:Color = new RGB(1, 1, 1);
+        
+        var x:Foo = Baz("aa");
+        
+        haxe.Log.trace("hhh");
         
         trace(a);
         trace(b);

@@ -8,6 +8,13 @@ import moon.core.Observable;
 import moon.core.Seq;
 import moon.core.Signal;
 
+enum Whatever
+{
+    Foo(a:Int);
+    Bar(a:Whatever);
+    Baz(a:Float, b:Bool);
+}
+
 
 /**
  * Completion does not work for Fiber and Observable unless you type it.
@@ -16,10 +23,11 @@ import moon.core.Signal;
  */
 class AsyncExamples
 {
+    public static var aaa = 7;
     
     public static function main()
     {
-        simpleExample();
+        //simpleExample();
         //permutationsExample();
         //nestedExample();
         //fibonacciExample();
@@ -30,6 +38,9 @@ class AsyncExamples
         //fiberDurationExample();
     }
     
+    // aaa => TField(TTypeExpr(TClassDecl(AsyncExamples)), FStatic(AsyncExamples, aaa))
+    // bbb => TLocal({meta,name,extra,$,t,id:14914,capture:false})
+    // var ccc => TVar({meta,name,extra,$,t,id:14914,capture:false})
     
     public static function simpleExample()
     {

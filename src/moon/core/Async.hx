@@ -37,12 +37,9 @@ class Async
      */
     public static macro function async(expr:Expr):Expr
     {
-        //trace("-----"); trace("-----");
-        
         return switch (expr.expr)
         {
             case EFunction(name, fn):
-                
                 var ab = new AsyncTransformer(name, fn, expr.pos);
                 fn.expr = ab.build();
                 return expr;

@@ -7,6 +7,13 @@ import moon.core.Observable;
 import moon.core.Seq;
 import moon.core.Signal;
 
+enum Worker
+{
+    Employee(name:String);
+    Manager(name:String, workers:Array<Worker>);
+}
+
+
 /**
  * Any function that contains @yield will be transformed into
  * generator function, including nested functions and class methods.
@@ -41,8 +48,10 @@ class AsyncSugaredExamples
     
     public static function main()
     {
-        methodExample();
+        //methodExample();
         //simpleExample();
+        awaitExample();
+        //tryExample();
         //permutationsExample();
         //nestedExample();
         //fibonacciExample();
@@ -55,19 +64,42 @@ class AsyncSugaredExamples
     
     public static function methodExample()
     {
-        for (name in customIterator())
+        for (name in customIterator("Hello", "How are you?"))
         {
             trace(name);
         }
     }
     
-    public static function customIterator():Iterator<String>
+    public static function customIterator(greet:String, msg:String):Iterator<String>
     {
-        @yield "alice";
-        @yield "bob";
-        @yield "carol";
-        @yield "dave";
+        var alice = Employee("alice");
+        var alice = Employee("alice"), bob = Employee("bob");
+        var carol = Employee("carol");
+        var dave = Manager("dave", [alice, bob, carol]);
+        
+        for (p in [alice, bob, carol, dave])
+        {
+            //var x = 
+            switch (p)
+            {
+                case Employee(name):
+                    @yield (greet + " " + name + "! " + msg);
+                    //Employee("aaa");
+                    
+                case Manager(name, workers):
+                    @yield (greet + " manager " + name + "! How are " + workers.join(", ") + " doing?");
+                    //Employee("bbb");
+                    
+                case _:
+                    @yield "hello";
+                    //Employee("ccc");
+            }
+            
+            //@yield ("x is " + x);
+            trace("test");
+        }
     }
+    
     
     public static function simpleExample()
     {
@@ -104,6 +136,70 @@ class AsyncSugaredExamples
             trace("AsyncException: " + ex);
         }
     }
+    
+    
+    public static function awaitExample()
+    {
+        var someFuture = new Future<Int>();
+        
+        function await():Iterator<String>
+        {
+            @yield "foo";
+            var x:Int = @await someFuture;
+            trace('value of x is $x');
+            @yield "bar";
+        }
+        
+        trace("Await Example");
+        trace("");
+        
+        var it = await();
+        var i = 0;
+        
+        while (it.hasNext())
+        {
+            // trigger completion when i is 3
+            if (i == 5) someFuture.complete(5318008);
+            trace(i + ": " + it.next());
+            ++i;
+        }
+        
+    }
+    
+    
+    public static function tryExample()
+    {
+        
+        function trycatch():Iterator<String>
+        {
+            try
+            {
+                @yield "aaa";
+                @yield "bbb";
+                throw 123;
+                @yield "ccc";
+            }
+            catch (ex:Int)
+            {
+                @yield ("ddd " + ex);
+            }
+            catch (ex:Bool)
+            {
+                @yield ("eee " + ex);
+            }
+        }
+        
+        trace("Try Example");
+        trace("");
+        
+        var it = trycatch();
+        
+        for (x in it)
+        {
+            trace(x);
+        }
+    }
+    
     
     public static function permutationsExample()
     {
@@ -275,17 +371,17 @@ class AsyncSugaredExamples
     {
         // Instead of returning a Fiber, you can also return a Future instead.
         // The final value yielded will be the result of this future.
-        function fiberFuture(m:String, a:Int, b:Int):Future<Int>
+        function fiberFuture(name:String, start:Int, stop:Int):Future<Int>
         {
-            trace(m + ": fiber start");
+            trace(name + ": fiber start");
             
-            for (vv in a...b)
+            for (i in start...stop)
             {
-                trace(m + ": " + vv);
-                @yield vv;
+                trace(name + ": " + i);
+                @yield i;
             }
             
-            trace(m + ": fiber end");
+            trace(name + ": fiber end");
         }
         
         trace("Fiber Example");
@@ -321,6 +417,7 @@ class AsyncSugaredExamples
                 @yield start++;
             }
             
+            // this will never reach
             trace(name + ": fiber end");
         }
         

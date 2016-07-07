@@ -63,11 +63,20 @@ These are all meant to be used as a static extension.
 
 ### Cooperative Multi-tasking in Haxe!
 
-You can now easily write asynchronous cooperatively-multitasking codes in Haxe! Unlike threads, you don't need to worry about locking, and this works on single-threaded targets too.
+You can now easily write asynchronous cooperatively-multitasking codes in Haxe! Unlike threads, you don't need to worry about locking, and this is especially useful to write asynchronous codes on single-threaded targets.
 
-This works just like the generator functions in JavaScript, Python, and C#. If a function or method contains a `@yield x` expression, then it is automatically transformed into a generator function.
+Here are some information on what generators are:
+- https://en.wikipedia.org/wiki/Generator_(computer_programming)
+- https://en.wikipedia.org/wiki/Coroutine
+- https://en.wikipedia.org/wiki/Fiber_(computer_science)
+
+This works just like the generator functions in JavaScript, Python, and C#. If a function or method contains a `@yield x` or `@await f` expression, then it is automatically transformed into a generator function.
+
+**NEW:** `@await f` where f is a `Future<T>`.
 
 ### Generators
+
+#### Using `@yield x` expression
 
 You can type the generator function with a valid async type, to get that type when the generator is called. In the following example, it's an `Iterator<String>`, but it could be other async types too.
 
@@ -108,6 +117,60 @@ while (it.hasNext())
 }
 ```
 
+#### Using `@await f` expression
+
+`@await f` is syntactic sugar for an expression of `@yield`. It's mainly useful in Fibers, but it can be used in Generators too. `@await f` is equivalent to:
+```haxe
+{
+    while (f.state == FutureState.Awaiting)
+        @yield __current;
+        
+    switch(f.state)
+    {
+        case FutureState.Success(v): v;
+        case FutureState.Failure(e): throw e;
+        case FutureState.Awaiting: throw "assert";
+    }
+}
+```
+
+Here's an example of it being used:
+```haxe
+var someFuture = new Future<Int>();
+
+function example():Iterator<String>
+{
+    @yield "foo";
+    var x:Int = @await someFuture;
+    trace('value of x is $x');
+    @yield "bar";
+}
+
+var it = example();
+var i = 0;
+
+while (it.hasNext())
+{
+    // trigger completion when i is 5
+    if (i == 5) someFuture.complete(5318008);
+    trace(i + ": " + it.next());
+    ++i;
+}
+
+// output
+// 0: foo
+// 1: foo
+// 2: foo
+// 3: foo
+// 4: foo
+// value of x is 5318008
+// 5: foo
+// 6: bar
+```
+
+
+#### Async Types
+
 So what else is valid besides Iterator and Generator? Here's a complete list:
 
 - Valid async generator types:
@@ -120,6 +183,13 @@ So what else is valid besides Iterator and Generator? Here's a complete list:
     - [`Future<T>`](src/moon/core/Future.hx)
     - [`Signal<T>`](src/moon/core/Signal.hx)
     - [`Observable<T>`](src/moon/core/Observable.hx)
+
+##### Future Ideas
+
+- Instead of hardcoding async types, allow any user-definable types (eg. `Foo`) that has a `public static function fromGenerator<A,B>(g:Generator<A,B>):Foo` to be a valid async type. The macro automatically detects and calls that function to return the correct type.
+    - Maybe also `fromIterator<A>(it:Iterator<A>):Foo` since `B` can be `Void`.
+    - Or just `fromGenerator<A,B>` and if either param is Void, it changes to Unit (so `send(x:B)` method is still valid).
+    - Or check from import list for static methods in the form `Generator<A,B>->T`. This allows you to define async type factories for other libraries (so you can, for example, use tink_core's Future instead of the one from this library).
 
 ### Fibers
 
@@ -158,7 +228,7 @@ The processor will automatically remove fibers that has terminated. You can manu
 
 ### How to Use
 
-There are 2 ways to use this async macro. One is by calling the `Async.async(function()...)` macro. The other way is to add a `@:build(moon.core.Sugar.buildAsync())` to your class. The second way results in cleaner looking code.
+There are 2 ways to use this async macro. One is by calling the `Async.async(function()...)` macro. The other, preferred, way is to add a `@:build(moon.core.Sugar.buildAsync())` to your class (or `build` instead of `buildAsync` for other stuff like short lambdas too). The second way results in cleaner looking code.
 
 See [AsyncExamples](test/AsyncExamples.hx) for more generator function examples using `Async.async()`.
 
@@ -178,13 +248,13 @@ See [ASYNC.md](ASYNC.md)
 
 ## Contributing
 
-I need help to iron out some issues related to the async stuff. Contibutions and bug fixes in general are welcomed.
+I need help to iron out some issues related to the async stuff. Contributions and bug fixes in general are welcomed.
 
-- When using @:build to transform the class, generator methods couldn't really determine the type of certain expressions, leading to some compile errors. Temporary workaround is to annotate such expressions with @void or @expr to indicate if it is a statement or an expression.
+- ~~When using @:build to transform the class, generator methods couldn't really determine the type of certain expressions, leading to some compile errors. Temporary workaround is to annotate such expressions with @void or @expr to indicate if it is a statement or an expression.~~ Should mostly work now.
 - I don't yet know how to deal with try/catch in generator functions.
 - Macro functions very unlikely to work within generator functions.
 - Generator functions don't yet support array comprehensions, but its do-able, I just haven't gotten around to doing it yet.
-- In a switch case, I don't know how to identify which EConst(CIdent(x)) are variable captures.
+- ~~In a switch case, I don't know how to identify which EConst(CIdent(x)) are variable captures.~~ This is done. Thanks Cauê Waneck!
 - It's possible to further optimize the result of transforming the generator function.
     - If you'd like to see the output of the various passes involved in transforming the generator function, open `moon.macros.async.AsyncTransformer.hx` and change `DEBUG_OUTPUT_TO_FILE` to `true`.
 

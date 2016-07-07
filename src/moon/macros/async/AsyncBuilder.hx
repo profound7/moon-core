@@ -49,7 +49,7 @@ class AsyncBuilder
             switch (f.kind)
             {
                 case FFun(fn):
-                    //trace(f.name, isGenerator(fn));
+                    //trace(f.name, fn.isGenerator());
                     var isAsync:Bool = false;
                     
                     for (m in f.meta)
@@ -66,8 +66,41 @@ class AsyncBuilder
                     
                     if (isAsync || fn.isGenerator())
                     {
-                        // create the async function
-                        f.kind = FFun(make(f.name, fn, f.pos));
+                        // not sure why this no longer works after using typedExpr
+                        // the function becomes null
+                        //var afn = make(f.name, fn, f.pos);
+                        //trace(afn.expr.toString());
+                        //f.kind = FFun(afn);
+                        
+                        var expr = transform(fn.expr);
+                        
+                        var fnExpr:Expr =
+                        {
+                            expr: EFunction(null,
+                            {
+                                args: fn.args,
+                                ret: fn.ret,
+                                expr: expr,
+                                params: fn.params,
+                            }),
+                            pos: f.pos
+                        };
+                        
+                        var args:Array<Expr> = [for (a in fn.args) macro $i{a.name}];
+                        
+                        f.kind = FFun(
+                        {
+                            args: fn.args,
+                            ret: fn.ret,
+                            expr: macro
+                            {
+                                return moon.core.Async.async($fnExpr)($a{args});
+                            },
+                            params: fn.params
+                        });
+                        
+                        var ex:Expr = f.kind.getParameters()[0].expr;
+                        //trace(ex.toString());
                     }
                     else
                     {

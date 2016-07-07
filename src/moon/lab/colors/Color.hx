@@ -214,7 +214,7 @@ private class ColorInternal
     
     public inline function isDark():Bool
     {
-        return !isLight()
+        return !isLight();
     }
     
     public function toString():String
