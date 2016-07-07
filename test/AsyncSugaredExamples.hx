@@ -7,12 +7,60 @@ import moon.core.Observable;
 import moon.core.Seq;
 import moon.core.Signal;
 
+// needed for custom wrappers using static extensions
+using AsyncSugaredExamples;
+
+// used by switch example below
 enum Worker
 {
     Employee(name:String);
     Manager(name:String, workers:Array<Worker>);
 }
 
+// used by custom wrapper example below
+class CustomWrapper<T>
+{
+    public var it:Iterable<T>;
+    
+    public function new()
+    {
+        it = [];
+    }
+    
+    /**
+     * You can define your own async type by having a static method
+     * named `fromAsync` with one argument of a valid async type.
+     */
+    /*public static function fromAsync<A>(it:Iterable<A>):CustomWrapper<A>
+    {
+        trace("custom wrapper using static fromAsync method");
+        var obj = new CustomWrapper<A>();
+        obj.it = it;
+        return obj;
+    }*/
+}
+
+class AsyncTypeExtensions
+{
+    /**
+     * Alternative method of creating wrappers:
+     * You can define your own async type by having a static method
+     * with one argument of a valid async type and a @asyncType meta.
+     * 
+     * This method is used to create wrappers when you don't have access
+     * to the wrapping class. For example, 3rd party libraries.
+     * 
+     * You need to include this class using static extensions (`using` keyword)
+     */
+    @asyncType
+    public static function createCustomWrapper<A>(it:Iterable<A>):CustomWrapper<A>
+    {
+        trace("custom wrapper using static extensions");
+        var obj = new CustomWrapper<A>();
+        obj.it = it;
+        return obj;
+    }
+}
 
 /**
  * Any function that contains @yield will be transformed into
@@ -50,7 +98,8 @@ class AsyncSugaredExamples
     {
         //methodExample();
         //simpleExample();
-        awaitExample();
+        customWrapperExample();
+        //awaitExample();
         //tryExample();
         //permutationsExample();
         //nestedExample();
@@ -134,6 +183,27 @@ class AsyncSugaredExamples
         catch (ex:Dynamic)
         {
             trace("AsyncException: " + ex);
+        }
+    }
+    
+    
+    public static function customWrapperExample()
+    {
+        // experimental: define your own async type
+        function custom(a:String):CustomWrapper<String>
+        {
+            @yield "aaa";
+            @yield "bbb";
+            @yield "ccc";
+        }
+        
+        trace("Custom Wrapper Example");
+        trace("");
+        var it = custom("hi").it;
+        
+        for (x in it)
+        {
+            trace(x);
         }
     }
     

@@ -32,6 +32,29 @@ class AsyncMacroTools
     
 }
 
+class AsyncTypeTools
+{
+    public static function isCompatibleWrapper(t1:Type, t2:Type):Bool
+    {
+        return switch (t1)
+        {
+            case TInst(a, p):
+                
+                switch (t2)
+                {
+                    case TInst(b, _):
+                        Context.unify(TInst(a, p), TInst(b, p));
+                        
+                    case _:
+                        false;
+                }
+                
+            case _:
+                false;
+        }
+    }
+}
+
 class AsyncComplexTypeTools
 {
     /**

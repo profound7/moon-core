@@ -24,13 +24,14 @@ class AsyncTransformer
     public var vars:Array<Var>;
     public var sets:Array<Var>;
     public var labels:Array<String>;
-    public var varInfo:VarInfo;
+    public var typedExprInfo:TypedExprInfo;
     
     public var name:String;
     public var fn:Function;
     public var pos:Position;
     
     public var yieldOnly:Bool;
+    public var wrapper:{ name:String, method:String };
     public var nextType:ComplexType;
     public var sendType:ComplexType;
     public var returnType:ComplexType;
@@ -47,7 +48,7 @@ class AsyncTransformer
     
     public function new(name:String, fn:Function, pos:Position)
     {
-        trace("---"); trace("---");
+        //trace("---"); trace("---");
         
         this.name = name;
         this.fn = fn;
@@ -59,12 +60,11 @@ class AsyncTransformer
         this.sets = [];
         this.labels = [];
         
-        this.varInfo = new VarInfo(fn.expr.pos);
-        
         this.void = macro @void if (false) null;
         this.out = [];
         
         this.yieldOnly = true;
+        this.wrapper = null;
         
         returnType = fn.ret;
         
@@ -87,51 +87,124 @@ class AsyncTransformer
             }
             catch (ex:Dynamic)
             {
+                // handled in if/else below
             }
         }
         
         if (returnType != null)
         {
             // get the full long name of the returnType
-            returnType = Context.typeof(macro (null:$returnType)).toComplexType();
+            var rType = Context.typeof(macro (null:$returnType));
+            returnType = rType.toComplexType();
             
-            switch (returnType)
+            function checkReturnType(ct:ComplexType):Void
             {
-                case  (macro:StdTypes.Iterator<$n>)
-                    | (macro:moon.core.Fiber<$n>)
-                    | (macro:moon.core.Future<$n>)
-                    | (macro:moon.core.Signal1<$n>)
-                    | (macro:moon.core.Observable<$n>)
-                    :
-                    //trace("ITERATOR");
-                    nextType = n;
-                    sendType = macro:StdTypes.Void;
-                    isIterable = false;
-                    
-                case  (macro:StdTypes.Iterable<$n>)
-                    | (macro:moon.core.Seq<$n>)
-                    :
-                    //trace("ITERABLE");
-                    nextType = n;
-                    sendType = macro:StdTypes.Void;
-                    isIterable = true;
-                    
-                case macro:moon.core.Generator<$n,$s>:
-                    //trace("GENERATOR");
-                    nextType = n;
-                    sendType = s;
-                    isIterable = false;
-                    
-                case _:
-                    //trace("OTHERS");
-                    throw Context.error
-                    (
-                        fn.ret.toString() + " is not a valid async type.\n" +
-                        "Valid async types are: Iterator, Iterable, Seq, Generator, " +
-                        "Fiber, Future, Signal, Observable",
-                        pos
-                    );
+                switch (ct)
+                {
+                    case  (macro:StdTypes.Iterator<$n>)
+                        | (macro:moon.core.Fiber<$n>)
+                        | (macro:moon.core.Future<$n>)
+                        | (macro:moon.core.Signal1<$n>)
+                        | (macro:moon.core.Observable<$n>)
+                        :
+                        //trace("ITERATOR");
+                        returnType = ct;
+                        nextType = n;
+                        sendType = macro:StdTypes.Void;
+                        isIterable = false;
+                        
+                    case  (macro:StdTypes.Iterable<$n>)
+                        | (macro:moon.core.Seq<$n>)
+                        :
+                        //trace("ITERABLE");
+                        returnType = ct;
+                        nextType = n;
+                        sendType = macro:StdTypes.Void;
+                        isIterable = true;
+                        
+                    case macro:moon.core.Generator<$n,$s>:
+                        //trace("GENERATOR");
+                        returnType = ct;
+                        nextType = n;
+                        sendType = s;
+                        isIterable = false;
+                        
+                    case _:
+                        
+                        // 3rd-party wrappers
+                        var usings = Context.getLocalUsing();
+                        var customParams:Array<Type> = null;
+                        
+                        switch (rType)
+                        {
+                            case TInst(_.get() => uclass, p):
+                                customParams = p;
+                                var statics = uclass.statics.get();
+                                
+                                // custom wrapper from static method of class
+                                for (fn in statics)
+                                {
+                                    switch (fn)
+                                    {
+                                        case { name: "fromAsync", type: TFun([arg], ret) }
+                                          if (ret.isCompatibleWrapper(rType)):
+                                            
+                                            var argType = arg.t.toComplexType();
+                                            var tp:TypePath = argType.getParameters()[0];
+                                            tp.params = [for (p in customParams) TPType(p.toComplexType())];
+                                            
+                                            wrapper = { name: uclass.name, method: fn.name };
+                                            checkReturnType(argType);
+                                            return;
+                                            
+                                        case _:
+                                    }
+                                }
+                                
+                            case _:
+                                // throw
+                        }
+                        
+                        // custom wrapper from static extensions of module
+                        for (uref in usings)
+                        {
+                            var uclass = uref.get();
+                            var statics = uclass.statics.get();
+                            
+                            for (fn in statics)
+                            {
+                                switch (fn)
+                                {
+                                    case { meta: _.has("asyncType") => true, type: TFun([arg], ret) }
+                                      if (ret.isCompatibleWrapper(rType)):
+                                        
+                                        var argType = arg.t.toComplexType();
+                                        var tp:TypePath = argType.getParameters()[0];
+                                        tp.params = [for (p in customParams) TPType(p.toComplexType())];
+                                        
+                                        wrapper = { name: uclass.name, method: fn.name };
+                                        checkReturnType(argType);
+                                        return;
+                                        
+                                    case _:
+                                }
+                            }
+                        }
+                        
+                        
+                        
+                        //trace("OTHERS");
+                        throw Context.error
+                        (
+                            fn.ret.toString() + " is not a valid async type.\n" +
+                            "Valid async types are: Iterator, Iterable, Seq, Generator, " +
+                            "Fiber, Future, Signal, Observable",
+                            pos
+                        );
+                }
             }
+            
+            checkReturnType(returnType);
         }
         else
         {
@@ -169,7 +242,7 @@ class AsyncTransformer
         #if !display
             
             if (te != null)
-                e = te.toExpr();
+                e = te.getInfo(fn.expr.pos).expr;
             
             out.push("\n");
             
@@ -314,45 +387,13 @@ class AsyncTransformer
         // get the types of the expressions.
         // fixes switch capture variable problem
         // thanks Cauê Waneck!
-        TypedExprTools.exprPos = fn.expr.pos;
-        TypedExprTools.identifiers = new Map();
-        TypedExprTools.vars = new Map();
-        TypedExprTools.names = new Map();
-        
         var te = Context.typeExpr(expr);
         print("preprocessing", te);
-        varInfo.mapVars(te);
         
         // return the function expression without the yieldFn and awaitFn
-        te = varInfo.exprByPos.get(fn.expr.pos.getInfos().min);
-        return te.toExpr();
-        
-        /*var e = te.toExpr();
-        
-        return switch (e)
-        {
-            case macro { $yFn; $aFn; $eFn; }:
-                
-                switch (eFn.expr)
-                {
-                    // { var x:A->B = function(a:A):B {...}; x; }
-                    case EBlock([{ expr: EVars([{ expr: { expr:
-                        EFunction(_, { expr: { expr: EBlock(args) } })
-                    }}]) }, _]):
-                        
-                        args[0];
-                        
-                    // function() {...}
-                    case EFunction(_, { expr: { expr: EBlock(args) } }):
-                        args[0];
-                        
-                    case _:
-                        throw "unexpected " + eFn.expr;
-                }
-                
-            case _:
-                throw "unexpected " + e.expr;
-        }*/
+        te = te.find(fn.expr.pos);
+        typedExprInfo = te.getInfo(fn.expr.pos);
+        return typedExprInfo.expr;
     }
     
     
@@ -387,7 +428,7 @@ class AsyncTransformer
             
             
         // declare hoisted vars
-        for (v in TypedExprTools.vars)
+        for (v in typedExprInfo.vars)
         {
             var name = v.name;
             var ctype = v.type;
@@ -454,7 +495,7 @@ class AsyncTransformer
             
             var it:Function =
             {
-                args: fn.args,
+                args: [],
                 ret: nextType == null ? null : macro:Iterator<$nextType>,
                 expr: macro $b{codes},
                 params: fn.params
@@ -473,45 +514,38 @@ class AsyncTransformer
         }
         
         // based on how the function is typed, return the appropriate one
-        return switch (returnType)
+        var returnExpr:Expr = switch (returnType)
         {
             case macro:StdTypes.Iterator<$n>:
                 
-                codes.push(macro return __generator);
-                macro $b{codes};
+                macro __generator;
                 
             case macro:StdTypes.Iterable<$n>:
                 
-                codes.push(macro return { iterator: function() return __iterator() });
-                macro $b{codes};
+                macro { iterator: function() return __iterator() };
                 
             case macro:moon.core.Seq<$n>:
                 
-                codes.push(macro return { iterator: function() return __iterator() });
-                macro $b{codes};
+                macro { iterator: function() return __iterator() };
                 
             case macro:moon.core.Generator<$n,$s>:
                 
-                codes.push(macro return __generator);
-                macro $b{codes};
+                macro __generator;
                 
             case macro:moon.core.Fiber<$n>:
                 
-                codes.push(macro return new moon.core.Fiber<$nextType>(1, __generator));
-                macro $b{codes};
+                macro new moon.core.Fiber<$nextType>(1, __generator);
                 
             case macro:moon.core.Future<$n>:
                 
                 codes.push(macro var __fiber = new moon.core.Fiber<$nextType>(1, __generator));
-                codes.push(macro return __fiber.result);
-                macro $b{codes};
+                macro __fiber.result;
                 
             case macro:moon.core.Signal1<$n>:
                 
                 codes.push(macro var __fiber = new moon.core.Fiber<$nextType>(1, __generator));
                 codes.push(macro __fiber.yielded = new moon.core.Signal<$nextType>());
-                codes.push(macro return __fiber.yielded);
-                macro $b{codes};
+                macro __fiber.yielded;
                 
             case macro:moon.core.Observable<$n>:
                 
@@ -519,14 +553,25 @@ class AsyncTransformer
                 codes.push(macro var __observable = new moon.core.Observable<$nextType>());
                 codes.push(macro __fiber.yielded = new moon.core.Signal<$nextType>());
                 codes.push(macro __fiber.yielded.add(function(x) __observable.value = x));
-                codes.push(macro return __observable);
-                macro $b{codes};
+                macro __observable;
                 
             case _:
                 // fallback to iterator
-                codes.push(macro return __generator);
-                macro $b{codes};
+                macro __generator;
         }
+        
+        // if a custom wrapper is defined, call the static fromAsync function
+        if (wrapper == null)
+        {
+            codes.push(macro return $returnExpr);
+        }
+        else
+        {
+            var method = wrapper.method;
+            codes.push(macro return $i{wrapper.name}.$method($returnExpr));
+        }
+            
+        return macro $b{codes};
     }
     
     
@@ -795,7 +840,8 @@ class AsyncTransformer
     {
         if (e == null) throw "expression is null";
         var result = false;
-        var typedExpr = varInfo.exprByPos.get(e.pos.getInfos().min);
+        //var typedExpr = varInfo.exprByPos.get(e.pos.getInfos().min);
+        var typedExpr = typedExprInfo.typedExprByPos.get(e.pos.getInfos().min);
         //trace("TE: " + typedExpr);
         var typedCt = typedExpr != null ? typedExpr.t.toComplexType() : null;
         
