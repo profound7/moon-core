@@ -65,7 +65,7 @@ These are all meant to be used as a static extension.
 
 You can now easily write asynchronous cooperatively-multitasking codes in Haxe! Unlike threads, you don't need to worry about locking, and this is especially useful to write asynchronous codes on single-threaded targets.
 
-Here are some information on what generators are:
+Here are some information on what generators/fibers are:
 - https://en.wikipedia.org/wiki/Generator_(computer_programming)
 - https://en.wikipedia.org/wiki/Coroutine
 - https://en.wikipedia.org/wiki/Fiber_(computer_science)
@@ -184,12 +184,62 @@ So what else is valid besides Iterator and Generator? Here's a complete list:
     - [`Signal<T>`](src/moon/core/Signal.hx)
     - [`Observable<T>`](src/moon/core/Observable.hx)
 
-##### Future Ideas
+##### Custom Async Types
 
-- Instead of hardcoding async types, allow any user-definable types (eg. `Foo`) that has a `public static function fromGenerator<A,B>(g:Generator<A,B>):Foo` to be a valid async type. The macro automatically detects and calls that function to return the correct type.
-    - Maybe also `fromIterator<A>(it:Iterator<A>):Foo` since `B` can be `Void`.
-    - Or just `fromGenerator<A,B>` and if either param is Void, it changes to Unit (so `send(x:B)` method is still valid).
-    - Or check from import list for static methods in the form `Generator<A,B>->T`. This allows you to define async type factories for other libraries (so you can, for example, use tink_core's Future instead of the one from this library).
+You can define your own async types, for less verbose code. There are 2 ways you can do that.
+
+Method 1: static `fromAsync` method in class
+
+```haxe
+class CustomWrapper<T>
+{
+    public var foo:Iterable<T>;
+    
+    public function new()
+    {
+        foo = [];
+    }
+    
+    // Iterable<A> can be any valid async type
+    public static function fromAsync<A>(it:Iterable<A>):CustomWrapper<A>
+    {
+        var obj = new CustomWrapper<A>();
+        obj.foo = it;
+        return obj;
+    }
+}
+```
+
+Method 2: static extensions with `@asyncType` meta
+
+```haxe
+class WhateverTools<T>
+{
+    // Iterable<A> can be any valid async type
+    @asyncType public static function whatever<A>(it:Iterable<A>):CustomWrapper<A>
+    {
+        var obj = new CustomWrapper<A>();
+        obj.foo = it;
+        return obj;
+    }
+}
+```
+
+After that, you can do this:
+
+```haxe
+function custom():CustomWrapper<String>
+{
+    @yield "aaa";
+    @yield "bbb";
+    @yield "ccc";
+}
+
+for (x in custom().foo)
+    trace(x);
+```
+
+Method 2 is useful when you don't have access to the class, for example, in 3rd party libraries. This gives you the flexibility to use, for example, tink_core's Future instead of the Future from this library.
 
 ### Fibers
 
@@ -246,24 +296,28 @@ neko async
 See [ASYNC.md](ASYNC.md)
 
 
-## Contributing
+## Todos
 
-I need help to iron out some issues related to the async stuff. Contributions and bug fixes in general are welcomed.
+I need help to iron out some issues related to the async stuff.
 
 - ~~When using @:build to transform the class, generator methods couldn't really determine the type of certain expressions, leading to some compile errors. Temporary workaround is to annotate such expressions with @void or @expr to indicate if it is a statement or an expression.~~ Should mostly work now.
-- I don't yet know how to deal with try/catch in generator functions.
-- Macro functions very unlikely to work within generator functions.
-- Generator functions don't yet support array comprehensions, but its do-able, I just haven't gotten around to doing it yet.
-- ~~In a switch case, I don't know how to identify which EConst(CIdent(x)) are variable captures.~~ This is done. Thanks Cauê Waneck!
+- ~~I don't yet know how to deal with try/catch in generator functions.~~
+- ~~Generator functions don't yet support array comprehensions, but its do-able, I just haven't gotten around to doing it yet.~~
+- ~~In a switch case, I don't know how to identify which EConst(CIdent(x)) are variable captures.~~ This is done! **Thanks Cauê Waneck!**
 - It's possible to further optimize the result of transforming the generator function.
     - If you'd like to see the output of the various passes involved in transforming the generator function, open `moon.macros.async.AsyncTransformer.hx` and change `DEBUG_OUTPUT_TO_FILE` to `true`.
+- Macro functions very unlikely to work within generator functions
+- Unit tests, and ensure it works on all platforms
+    - currently only tested in neko
 
+## Contributing
+
+Feel free to contribute. Contributions, bug fixes, and feature requests are welcomed.
 
 ## Credits
 
 Most of the lib was written by me, however, some portions of it was ported from other open source codes. Some are not ported, but are adaptations or implementations based on ideas and algorithms from articles and online discussions.
-
-
+  
 - BigInteger and BigRational `moon.numbers.big` (port)
   Peter Olson: https://github.com/peterolson/BigInteger.js/blob/master/BigInteger.js
 

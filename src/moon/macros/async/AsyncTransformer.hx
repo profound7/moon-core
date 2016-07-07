@@ -1658,8 +1658,12 @@ class AsyncTransformer
         
         return switch (e.expr)
         {
-            case EFunction(_, _):
-                e; // stop and don't go deeper
+            case  EFunction(_, _)
+                | EWhile(_, _, _)
+                | EFor(_, _)
+                | ETry(_, _)
+                :
+                e;
                 
             // { ...; { a; b; c; }; ... }       ==> { ...; a; b; c; ...; }
             // { ...; x = { a; b; c; }; ... }   ==> { ...; a; b; x = c; ...; }

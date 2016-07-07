@@ -190,8 +190,10 @@ class AsyncSugaredExamples
     public static function customWrapperExample()
     {
         // experimental: define your own async type
-        function custom(a:String):CustomWrapper<String>
+        function custom():CustomWrapper<String>
         {
+            var a = [for (i in 0...5) i];
+            trace(a);
             @yield "aaa";
             @yield "bbb";
             @yield "ccc";
@@ -199,7 +201,7 @@ class AsyncSugaredExamples
         
         trace("Custom Wrapper Example");
         trace("");
-        var it = custom("hi").it;
+        var it = custom().it;
         
         for (x in it)
         {
