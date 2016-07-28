@@ -1,4 +1,5 @@
 package moon.test;
+
 import haxe.PosInfos;
 import moon.core.Future;
 
@@ -8,19 +9,22 @@ import moon.core.Future;
  */
 class TestStatus
 {
-    public var status:Status;
-    public var async:Future<Bool>;
+    public var outcomes:Array<TestOutcome>;
     
-    public var error:String;
+    //public var status:Status;
+    //public var async:Future<Bool>;
+    
+    //public var error:String;
     public var method:String;
     public var className:String;
-    public var posInfos:PosInfos;
-    public var backtrace:String;
+    //public var posInfos:PosInfos;
+    //public var backtrace:String;
     
     public function new()
     {
-        status = NotStarted;
-        async = new Future<Bool>();
+        outcomes = [];
+        //status = NotStarted;
+        //async = new Future<Bool>();
     }
     
     public function msg(info:String, actual:Dynamic, expected:Dynamic):String
@@ -36,29 +40,32 @@ class TestStatus
     
     public function ok():Void
     {
-        status = Success;
-        async.complete(true);
+        var out = new TestOutcome();
+        out.ok();
+        outcomes.push(out);
     }
     
     public function err(msg:String, pos:PosInfos, throwError:Bool=true):Void
     {
-        status = Failed;
-        error = msg;
-        posInfos = pos;
-        async.complete(false);
+        var out = new TestOutcome();
+        out.err(msg, pos);
+        outcomes.push(out);
         if (throwError) throw this;
     }
     
     public function fail(info:String, actual:Dynamic, expected:Dynamic, pos:PosInfos, throwError:Bool=true):Void
     {
-        err(msg(info, actual, expected), pos, throwError);
+        var out = new TestOutcome();
+        out.fail(info, actual, expected, pos);
+        outcomes.push(out);
+        if (throwError) throw this;
+    }
+    
+    public function pending():TestOutcome
+    {
+        var out = new TestOutcome();
+        outcomes.push(out);
+        return out;
     }
 }
 
-enum Status
-{
-    NotStarted;
-    Success;
-    Failed;
-    Pending;
-}

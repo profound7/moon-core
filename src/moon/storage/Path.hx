@@ -252,7 +252,7 @@ package moon.storage;
     }
     
     // adds a path to this path
-    @:op(A + B) public inline function concat(path:Path):Path
+    public inline function concat(path:Path):Path
     {
         return this = this.concat(path);
     }

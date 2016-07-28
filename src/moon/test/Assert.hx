@@ -5,6 +5,7 @@ import moon.core.Any;
 import moon.core.Future;
 import moon.core.Invoke;
 import moon.test.TestStatus;
+import moon.tools.FloatTools;
 
 /**
  * ...
@@ -18,6 +19,7 @@ class Assert
     public function new() 
     {
     }
+    
     
     /*==================================================
         Asserts
@@ -89,6 +91,91 @@ class Assert
         is(actual, expected, Any.equals, "isType", pos);
     }
     
+    
+    private function are(actual:Array<Dynamic>, expected:Array<Dynamic>, eq:Dynamic->Dynamic->Bool, info:String, ?pos:PosInfos):Void
+    {
+        if (actual == null)
+            currentTest.fail(info + " (actual is NULL)", actual, expected, pos);
+        else if (expected == null)
+            currentTest.fail(info + " (expected is NULL)", actual, expected, pos);
+        else if (actual.length != expected.length)
+            currentTest.fail(info + " (length different)", actual, expected, pos);
+        else
+        {
+            for (i in 0...actual.length)
+            {
+                if (!eq(actual[i], expected[i]))
+                {
+                    currentTest.fail(info, actual, expected, pos);
+                    return;
+                }
+            }
+            
+            currentTest.ok();
+        }
+    }
+    
+    public function areEqual(actual:Array<Dynamic>, expected:Array<Dynamic>, ?pos:PosInfos):Void
+    {
+        are(actual, expected, Any.equals, "areNear", pos);
+    }
+    
+    public function areNear(actual:Array<Dynamic>, expected:Array<Dynamic>, epsilon:Float, ?pos:PosInfos):Void
+    {
+        var fn = function(a, b) return FloatTools.isNear(a, b, epsilon);
+        are(actual, expected, fn, "areNear", pos);
+    }
+    
+    public function throws(fn:Void->Dynamic, ?pos:PosInfos):Void
+    {
+        try
+        {
+            fn();
+            currentTest.fail("throws", "No error", "Error", pos, false);
+        }
+        catch (ex:Dynamic)
+        {
+            currentTest.ok();
+        }
+    }
+    
+    public function noThrows(fn:Void->Dynamic, ?pos:PosInfos):Void
+    {
+        try
+        {
+            fn();
+            currentTest.ok();
+        }
+        catch (ex:Dynamic)
+        {
+            currentTest.fail("noThrows", "Error", "No error", pos, false);
+        }
+    }
+    
+    public function returns(fn:Void->Dynamic, value:Dynamic, ?pos:PosInfos):Void
+    {
+        try
+        {
+            var x = fn();
+            
+            if (Any.deepEquals(x, value))
+            {
+                //trace("equal!");
+                currentTest.ok();
+            }
+            else
+            {
+                //trace("not equal!");
+                currentTest.fail("returns", x, value, pos, false);
+            }
+        }
+        catch (ex:Dynamic)
+        {
+            //trace("ERROR!");
+            currentTest.fail("returns", "Error", "No error", pos, false);
+        }
+    }
+    
     /*==================================================
         Async Asserts
     ==================================================*/
@@ -97,7 +184,7 @@ class Assert
     {
         (function(currentTest:TestStatus):Void
         {
-            currentTest.status = Pending;
+            var outcome = currentTest.pending();
             
             // if timeout is given, fail the Future when timeout expires
             if (timeout_ms != null)
@@ -116,14 +203,14 @@ class Assert
             actual.onComplete(function(value:Dynamic):Void
             {
                 if (eq(value, expected))
-                    currentTest.ok();
+                    outcome.ok();
                 else
-                    currentTest.fail(info, value, expected, pos, false);
+                    outcome.fail(info, value, expected, pos);
             });
             
             actual.onFail(function(err:Dynamic):Void
             {
-                currentTest.err("Error: " + Std.string(err), pos, false);
+                outcome.err("Error: " + Std.string(err), pos);
             });
             
         })(currentTest);

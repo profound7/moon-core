@@ -8,65 +8,76 @@ import moon.test.TestStatus;
  */
 class TestResult
 {
-    private var m_tests:List<TestStatus>;
+    private var tests:List<TestStatus>;
     public var success(default, null):Bool;
 
     public function new()
     {
-        m_tests = new List();
+        tests = new List();
         success = true;
     }
 
     public function add(t:TestStatus):Void
     {
-        m_tests.add(t);
-        if (t.status != Success)
-            success = false;
+        tests.add(t);
+        if (success == true)
+            for (outcome in t.outcomes)
+                if (outcome.status != Success)
+                    { success = false; break; }
     }
 
     public function toString():String
     {
         var buf = new StringBuf();
+        
         var failures = 0;
+        var success = 0;
         
         buf.add("\n");
         
-        for (test in m_tests)
+        for (test in tests)
         {
-            if (test.status != Success)
+            for (outcome in test.outcomes)
             {
-                buf.add("* ");
-                buf.add(test.className);
-                buf.add("::");
-                buf.add(test.method);
-                buf.add("()");
-                buf.add("\n");
-                
-                buf.add("ERR: ");
-                
-                if (test.posInfos != null)
+                if (outcome.status != Success)
                 {
-                    buf.add(test.posInfos.fileName);
-                    buf.add(":");
-                    buf.add(test.posInfos.lineNumber);
-                    buf.add("(");
-                    buf.add(test.posInfos.className);
-                    buf.add(".");
-                    buf.add(test.posInfos.methodName);
-                    buf.add(") - \n");
-                }
-                
-                buf.add(test.error);
-                buf.add("\n");
-                
-                if (test.backtrace != null && test.backtrace.length > 0)
-                {
-                    buf.add(test.backtrace);
+                    buf.add("* ");
+                    buf.add(test.className);
+                    buf.add("::");
+                    buf.add(test.method);
+                    buf.add("()");
                     buf.add("\n");
+                    
+                    buf.add("ERR: ");
+                    
+                    if (outcome.posInfos != null)
+                    {
+                        buf.add(outcome.posInfos.fileName);
+                        buf.add(":");
+                        buf.add(outcome.posInfos.lineNumber);
+                        buf.add("(");
+                        buf.add(outcome.posInfos.className);
+                        buf.add(".");
+                        buf.add(outcome.posInfos.methodName);
+                        buf.add(") - \n");
+                    }
+                    
+                    buf.add(outcome.error);
+                    buf.add("\n");
+                    
+                    if (outcome.backtrace != null && outcome.backtrace.length > 0)
+                    {
+                        buf.add(outcome.backtrace);
+                        buf.add("\n");
+                    }
+                    
+                    buf.add("\n");
+                    ++failures;
                 }
-                
-                buf.add("\n");
-                failures++;
+                else
+                {
+                    ++success;
+                }
             }
         }
         
@@ -77,11 +88,13 @@ class TestResult
         else
             buf.add("FAILED ");
             
-        buf.add(m_tests.length);
+        buf.add(tests.length);
         buf.add(" tests, ");
+        buf.add(success + failures);
+        buf.add(" asserts, ");
         buf.add(failures);
         buf.add(" failed, ");
-        buf.add((m_tests.length - failures));
+        buf.add(success);
         buf.add(" success");
         buf.add("\n");
         

@@ -126,50 +126,67 @@ class TestRunner
                 Assert.currentTest = currentTest;
                 Reflect.callMethod(c, field, []);
                 
-                switch (currentTest.status)
+                var outcomeTotal = currentTest.outcomes.length;
+                var outcomeDone = 0;
+                
+                for (outcome in currentTest.outcomes)
                 {
-                    case NotStarted:
-                        print("W");
-                        currentTest.error = "(warning) no assert";
-                        ret.complete(currentTest);
-                        
-                    case Success:
-                        print(".");
-                        ret.complete(currentTest);
-                        
-                    case Failed:
-                        print("F");
-                        ret.complete(currentTest);
-                        
-                    case Pending:
-                        //print("?");
-                        currentTest.async.onComplete(function(success:Bool):Void
-                        {
-                            if (success)
+                    switch (outcome.status)
+                    {
+                        case NotStarted:
+                            print("W");
+                            outcome.error = "(warning) no assert";
+                            ++outcomeDone;
+                            //ret.complete(currentTest);
+                            
+                        case Success:
+                            print(".");
+                            ++outcomeDone;
+                            //ret.complete(currentTest);
+                            
+                        case Failed:
+                            print("F");
+                            ++outcomeDone;
+                            //ret.complete(currentTest);
+                            
+                        case Pending:
+                            //print("?");
+                            outcome.async.onComplete(function(success:Bool):Void
                             {
-                                print(".");
-                            }
-                            else
-                            {
-                                print("F");
-                                currentTest.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
-                            }
+                                if (success)
+                                {
+                                    print(".");
+                                }
+                                else
+                                {
+                                    print("F");
+                                    outcome.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+                                }
                                 
-                            ret.complete(currentTest);
-                        });
+                                ++outcomeDone;
+                                
+                                if (outcomeDone >= outcomeTotal)
+                                    ret.complete(currentTest);
+                            });
+                    }
                 }
+                
+                if (outcomeDone >= outcomeTotal)
+                    ret.complete(currentTest);
             }
             catch (e:TestStatus)
             {
                 print("F");
-                currentTest.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+                var outcome = currentTest.outcomes[currentTest.outcomes.length - 1];
+                outcome.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
                 ret.complete(currentTest);
             }
             catch (e:Dynamic)
             {
                 print("E");
-                currentTest.error = e;
-                currentTest.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+                var outcome = currentTest.outcomes[currentTest.outcomes.length - 1];
+                outcome.error = e;
+                outcome.backtrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
                 ret.complete(currentTest);
             }
         }

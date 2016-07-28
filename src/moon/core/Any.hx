@@ -111,8 +111,8 @@ abstract Any(Dynamic)
                 | [TBool, TBool]
                 | [TClass(String), TClass(String)]:
                     
-                throw "Unexpected case";
-                //return a == b;
+                //throw "Unexpected case";
+                return a == b;
                 
             case [TFunction, TFunction]:
                 
