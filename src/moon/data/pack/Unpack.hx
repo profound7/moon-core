@@ -49,24 +49,29 @@ class Unpack
             
             case PFloat32: bytes.readFloat();
             case PFloat64: bytes.readDouble();
+            case PFloatNaN: Math.NaN;
+            case PFloatPosInf: Math.POSITIVE_INFINITY;
+            case PFloatNegInf: Math.NEGATIVE_INFINITY;
             
-            case PString0: "";
-            case PString1: bytes.read(1).toString();
-            case PString8: bytes.read(bytes.readInt8()).toString();
-            case PString16: bytes.read(bytes.readInt16()).toString();
-            case PString32: bytes.read(bytes.readInt32()).toString();
+            case PStringL0: "";
+            case PStringL1: bytes.read(1).toString();
+            case PStringB8: bytes.read(bytes.readInt8()).toString();
+            case PStringB16: bytes.read(bytes.readInt16()).toString();
+            case PStringB32: bytes.read(bytes.readInt32()).toString();
             
-            case PArray0: [];
-            case PArray1: [unpackAny()];
-            case PArray8: [for (i in 0...bytes.readInt8()) unpackAny()];
-            case PArray16: [for (i in 0...bytes.readInt16()) unpackAny()];
-            case PArray32: [for (i in 0...bytes.readInt32()) unpackAny()];
+            case PArrayL0: [];
+            case PArrayL1: [unpackAny()];
+            case PArrayB8: [for (i in 0...bytes.readInt8()) unpackAny()];
+            case PArrayB16: [for (i in 0...bytes.readInt16()) unpackAny()];
+            case PArrayB32: [for (i in 0...bytes.readInt32()) unpackAny()];
             
             case PObject0: unpackObject(0);
             case PObject1: unpackObject(1);
             case PObject8: unpackObject(8);
             case PObject16: unpackObject(16);
             case PObject32: unpackObject(32);
+            
+            case PInstance: unpackInstance();
             
             case t: throw "Unsupported: " + t;
         }
@@ -107,11 +112,45 @@ class Unpack
             case _: throw "Invalid";
         }
         
+        var keys:Array<String> = [];
+        
         for (i in 0...len)
         {
-            var k:String = unpackAny();
+            keys.push(unpackAny());
+        }
+        
+        for (i in 0...len)
+        {
+            var k:String = keys[i];
             var v:Dynamic = unpackAny();
             Reflect.setField(obj, k, v);
+        }
+        
+        return obj;
+    }
+    
+    private function unpackInstance():Dynamic
+    {
+        var className:String = unpackAny();
+        var classRef = Type.resolveClass(className);
+        
+        if (classRef == null)
+        {
+            throw 'Class $className not found';
+        }
+        
+        var obj = Type.createEmptyInstance(classRef);
+        var keys = Type.getInstanceFields(classRef);
+        keys.sort(Reflect.compare);
+        
+        // store the values
+        for (k in keys)
+        {
+            if (!Reflect.isFunction(Reflect.field(obj, k)))
+            {
+                var v = unpackAny();
+                Reflect.setField(obj, k, v);
+            }
         }
         
         return obj;

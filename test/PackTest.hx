@@ -2,7 +2,9 @@ package;
 
 import haxe.Int64;
 import haxe.io.Bytes;
+import haxe.Serializer;
 import moon.data.pack.Pack;
+import moon.data.pack.PackTools;
 import moon.data.pack.Unpack;
 
 /**
@@ -18,13 +20,15 @@ class PackTest
         
         var pack = new Pack(true);
         
+        
+        //var input:Dynamic = { abc: "aaa", def: 123, ghi: null };
         var input:Dynamic = [
             new Cat("tom", 1.23),
             //new Animal("feline", 5),
             //new Cat("tom", 1.23),
         ];
         
-        input.ghi = input;
+        //input.ghi = input;
         
         trace("input:");
         trace(input);
@@ -67,6 +71,7 @@ class Cat extends Animal
 {
     public var name:String;
     public var age:Float;
+    public var onInit(never, default):Void->Int;
     
     public function new(name:String, age:Float)
     {
@@ -74,6 +79,11 @@ class Cat extends Animal
         
         this.name = name;
         this.age = age;
+    }
+    
+    public function meow():Void
+    {
+        trace('$name meows!');
     }
 }
 

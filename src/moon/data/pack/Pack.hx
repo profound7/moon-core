@@ -81,6 +81,9 @@ class Pack
     {
         switch (Type.typeof(v))
         {
+            case TNull:
+                bytes.writeByte(PNull);
+                
             case TBool:
                 packBool(v);
                 
@@ -150,15 +153,22 @@ class Pack
     {
         // todo: decide if 32 or 64 bits
         //packFloat64(v);
-        
-        if (FPHelper.i32ToFloat(FPHelper.floatToI32(v)) == v)
+        if (Math.isNaN(v))
         {
-            trace('$v is float32');
+            bytes.writeByte(PFloatNaN);
+        }
+        else if (!Math.isFinite(v))
+        {
+            bytes.writeByte(v < 0 ? PFloatNegInf : PFloatPosInf);
+        }
+        else if (FPHelper.i32ToFloat(FPHelper.floatToI32(v)) == v)
+        {
+            //trace('$v is float32');
             packFloat32(v);
         }
         else
         {
-            trace('$v is float64');
+            //trace('$v is float64');
             packFloat64(v);
         }
     }
@@ -198,7 +208,7 @@ class Pack
     {
         if (str.length == 0)
         {
-            bytes.writeByte(PString0);
+            bytes.writeByte(PStringL0);
         }
         else
         {
@@ -221,21 +231,21 @@ class Pack
             
             if (len == 1)
             {
-                bytes.writeByte(PString1);
+                bytes.writeByte(PStringL1);
             }
             else if (len <= unsignedHi(8))
             {
-                bytes.writeByte(PString8);
+                bytes.writeByte(PStringB8);
                 bytes.writeInt8(len);
             }
             else if (len <= unsignedHi(16))
             {
-                bytes.writeByte(PString16);
+                bytes.writeByte(PStringB16);
                 bytes.writeInt16(len);
             }
             else if (len <= unsignedHi(32))
             {
-                bytes.writeByte(PString32);
+                bytes.writeByte(PStringB32);
                 bytes.writeInt32(len);
             }
             else
@@ -251,7 +261,7 @@ class Pack
     {
         if (arr.length == 0)
         {
-            bytes.writeByte(PArray0);
+            bytes.writeByte(PArrayL0);
         }
         else
         {
@@ -274,21 +284,21 @@ class Pack
             
             if (len == 1)
             {
-                bytes.writeByte(PArray1);
+                bytes.writeByte(PArrayL1);
             }
             else if (len <= unsignedHi(8))
             {
-                bytes.writeByte(PArray8);
+                bytes.writeByte(PArrayB8);
                 bytes.writeInt8(len);
             }
             else if (len <= unsignedHi(16))
             {
-                bytes.writeByte(PArray16);
+                bytes.writeByte(PArrayB16);
                 bytes.writeInt16(len);
             }
             else if (len <= unsignedHi(32))
             {
-                bytes.writeByte(PArray32);
+                bytes.writeByte(PArrayB32);
                 bytes.writeInt32(len);
             }
             else
@@ -298,6 +308,13 @@ class Pack
             
             for (v in arr) packAny(v);
         }
+    }
+    
+    
+    
+    public function packFields(obj:{})
+    {
+        
     }
     
     public function packObject(obj:{})
@@ -355,23 +372,63 @@ class Pack
             // can be compared as string
             if (sortKeys) keys.sort(Reflect.compare);
             
-            for (k in keys)
-            {
-                trace(k);
-                packString(k);
-                packAny(Reflect.field(obj, k));
-            }
+            // store the fields for the first instance
+            for (k in keys) packString(k);
+            // todo: store RefFields instead for subsequent instances
+            
+            // now store the values
+            for (k in keys) packAny(Reflect.field(obj, k));
         }
     }
+    
+    
     
     public function packInstance(obj:{})
     {
         var classRef = Type.getClass(obj);
         var className = Type.getClassName(classRef);
-        var classFields = Type.getInstanceFields(classRef);
         
-        trace(className);
-        trace(classFields);
-        throw "oops";
+        if (useCache)
+        {
+            var ptr = objectCache.get(obj);
+            
+            if (ptr != null)
+            {
+                packRef(ptr);
+                return;
+            }
+            else
+            {
+                objectCache.set(obj, bytes.length);
+            }
+        }
+        
+        
+        var customMethodName = "__pack__";
+        var customMethodFn = Reflect.field(obj, customMethodName);
+        
+        if (customMethodFn != null && Reflect.isFunction(customMethodFn))
+        {
+            Reflect.callMethod(obj, customMethodFn, [this]);
+        }
+        else
+        {
+            var keys = Type.getInstanceFields(classRef);
+            keys.sort(Reflect.compare);
+            
+            bytes.writeByte(PInstance);
+            packString(className);
+            
+            // store the values
+            for (k in keys)
+            {
+                var v = Reflect.field(obj, k);
+                
+                if (!Reflect.isFunction(v))
+                {
+                    packAny(v);
+                }
+            }
+        }
     }
 }
